@@ -6,6 +6,9 @@ name: publish-plugin
 on:
     workflow_dispatch:
 
+permissions:
+    contents: write
+
 jobs:
     publish-plugin:
         runs-on: ubuntu-latest
@@ -37,4 +40,30 @@ jobs:
                   echo "Publishing plugin..."
                   curl -s --fail-with-body -XPOST 'https://node.windy.com/plugins/v1.0/upload' -H "x-windy-api-key: ${WINDY_API_KEY}" -F "plugin_archive=@../plugin.tar" | tee /tmp/upload.json
                   echo
-                  echo "::notice title=Lien du plugin à partager::$(grep -oE 'https://windy-plugins\.com/[^"]+plugin\.min\.js' /tmp/upload.json | head -1)"
+                  URL=$(grep -oE 'https://windy-plugins\.com/[^" ]+plugin\.min\.js' /tmp/upload.json | head -1 || true)
+                  echo "PLUGIN_URL=${URL}" >> "$GITHUB_ENV"
+                  {
+                    echo "## ⛵ Plugin publié"
+                    echo
+                    echo "Lien à coller dans Windy (windy.com/plugins, « Charger le plugin directement depuis l'URL ») :"
+                    echo
+                    echo "\`${URL:-voir la réponse ci dessous}\`"
+                    echo
+                    echo "Réponse brute de Windy :"
+                    echo
+                    echo '```'
+                    cat /tmp/upload.json
+                    echo
+                    echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  echo "::notice title=Lien du plugin à partager::${URL:-voir le résumé du job}"
+            - name: Save plugin URL
+              if: env.PLUGIN_URL != ''
+              run: |
+                  git checkout -- src package.json
+                  echo "$PLUGIN_URL" > PLUGIN_URL.txt
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add PLUGIN_URL.txt
+                  git diff --cached --quiet || git commit -m "Lien du plugin publié"
+                  git push || (git pull --rebase && git push)
