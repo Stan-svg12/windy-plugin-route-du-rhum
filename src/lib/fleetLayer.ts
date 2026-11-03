@@ -273,6 +273,7 @@ export class FleetLayer {
             if (b) {
                 this.flyTo(b);
                 this.openPopup(b);
+                this.opts.onSelect(this.selected);
             }
             return;
         }

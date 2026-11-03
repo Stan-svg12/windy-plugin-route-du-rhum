@@ -225,7 +225,7 @@
     const normalize = (s: string) =>
         s
             .normalize('NFD')
-            .replace(/[̀-ͯ]/g, '')
+            .replace(/[\u0300-\u036f]/g, '')
             .toLowerCase();
 
     $: nextIn = fleet ? minutesUntil(fleet.next, now) : null;
@@ -442,6 +442,11 @@
                     }
                 }
                 resolvePending();
+                // La bulle du bateau suivi est redessinée : on y remet le vent
+                const sel = selectedId ? layer.getBoat(selectedId) : null;
+                if (sel) {
+                    showWind(sel);
+                }
             }
         } catch (e) {
             console.error('[route-du-rhum]', e);
