@@ -1,10 +1,18 @@
 name: publish-plugin
 
-# Publie le plugin sur windy-plugins.com (lancement manuel : Actions > publish-plugin > Run workflow).
+# Publie le plugin sur windy-plugins.com.
+# Se lance tout seul quand le code du plugin change sur main, ou à la main (Actions > publish-plugin > Run workflow).
 # Prérequis : secret WINDY_API_KEY (clé "Windy Plugins API" créée sur https://api.windy.com/keys).
+# Chaque publication doit porter une nouvelle version (champ version de src/pluginConfig.ts).
 
 on:
     workflow_dispatch:
+    push:
+        branches: [main]
+        paths:
+            - 'src/**'
+            - 'package.json'
+            - '.github/workflows/publish-plugin.yml'
 
 permissions:
     contents: write
@@ -16,16 +24,33 @@ jobs:
             WINDY_API_KEY: '${{ secrets.WINDY_API_KEY }}'
         steps:
             - uses: actions/checkout@v7
+            - name: Check secret and version
+              id: guard
+              run: |
+                  VERSION=$(grep -oE "version: '[0-9]+\.[0-9]+\.[0-9]+'" src/pluginConfig.ts | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+                  echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+                  if [ -z "$WINDY_API_KEY" ]; then
+                    echo "::warning title=Publication en attente::Ajoute le secret WINDY_API_KEY puis relance ce workflow."
+                    echo "skip=true" >> "$GITHUB_OUTPUT"
+                  elif [ -f PLUGIN_URL.txt ] && grep -q "/${VERSION}/plugin.min.js" PLUGIN_URL.txt; then
+                    echo "::notice title=Déjà publié::La version ${VERSION} est déjà en ligne : $(cat PLUGIN_URL.txt). Augmente la version pour republier."
+                    echo "skip=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "skip=false" >> "$GITHUB_OUTPUT"
+                  fi
             - name: Inject repository
+              if: steps.guard.outputs.skip != 'true'
               run: |
                   # Le plugin lit les trajectoires mises à jour chaque heure dans ce dépôt
                   sed -i "s#__RDR_REPO__#${GITHUB_REPOSITORY}#g" src/lib/config.ts src/pluginConfig.ts package.json
                   grep -n "const REPO\|repository:" src/lib/config.ts src/pluginConfig.ts
             - name: Build
+              if: steps.guard.outputs.skip != 'true'
               run: |
                   npm install
                   npm run build
             - name: Publish Plugin
+              if: steps.guard.outputs.skip != 'true'
               run: |
                   if [ -z "$WINDY_API_KEY" ]; then
                     echo "Secret WINDY_API_KEY is not configured" >&2
@@ -58,7 +83,7 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
                   echo "::notice title=Lien du plugin à partager::${URL:-voir le résumé du job}"
             - name: Save plugin URL
-              if: env.PLUGIN_URL != ''
+              if: steps.guard.outputs.skip != 'true' && env.PLUGIN_URL != ''
               run: |
                   git checkout -- src package.json
                   echo "$PLUGIN_URL" > PLUGIN_URL.txt

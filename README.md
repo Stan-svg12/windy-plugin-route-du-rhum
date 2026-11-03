@@ -24,13 +24,17 @@ Les 115 bateaux de la Route du Rhum Destination Guadeloupe 2026 affichés sur la
 
 Si le site officiel ne répond pas, le plugin affiche le dernier relevé enregistré dans `data/latest.json`. Si GitHub ne répond pas, il utilise les trajectoires embarquées dans le plugin.
 
-## Mise en ligne (une seule fois, 5 minutes)
+## Mise en ligne (une seule fois, 3 minutes)
 
-1. **Créer le dépôt** : sur GitHub, nouveau dépôt **public** nommé `windy-plugin-route-du-rhum`, puis y pousser ce dossier sur la branche `main`. Le dépôt doit être public : le plugin y lit les trajectoires.
+1. **Créer le dépôt** public `windy-plugin-route-du-rhum` sur GitHub (vide, sans README). Il doit être public : le plugin y lit les trajectoires.
 2. **Clé Windy** : sur <https://api.windy.com/keys>, créer une clé de type **Windy Plugins API**.
 3. **Secret GitHub** : dans le dépôt, Settings, Secrets and variables, Actions, New repository secret. Nom `WINDY_API_KEY`, valeur la clé de l'étape 2.
-4. **Publier** : onglet Actions, workflow **publish-plugin**, Run workflow. À la fin, le résumé du job affiche le lien du plugin, de la forme `https://windy-plugins.com/<id>/windy-plugin-route-du-rhum/1.0.0/plugin.min.js`.
-5. **Lancer l'enregistrement des trajectoires** : onglet Actions, workflow **update-tracks**, Run workflow une première fois. Il tourne ensuite tout seul toutes les 30 minutes.
+4. **Pousser ce dossier** sur la branche `main`. Deux workflows démarrent seuls :
+   **publish-plugin** publie le plugin et écrit son lien dans `PLUGIN_URL.txt` (et dans le résumé du job),
+   **update-tracks** enregistre les positions, puis tourne toutes les 30 minutes.
+
+Si le secret est ajouté après le premier envoi, lancer **publish-plugin** à la main (Actions, publish-plugin, Run workflow).
+Le lien publié a la forme `https://windy-plugins.com/<id>/windy-plugin-route-du-rhum/1.0.0/plugin.min.js`.
 
 ## Installer et partager
 
@@ -46,7 +50,7 @@ Le plugin est **privé** (`private: true`) : il n'apparaît pas dans la galerie 
 
 ## Mettre à jour le plugin
 
-Modifier le code, augmenter `version` dans `src/pluginConfig.ts` (1.0.1, 1.1.0…), puis relancer **publish-plugin**. Windy refuse une version déjà publiée.
+Modifier le code, augmenter `version` dans `src/pluginConfig.ts` (1.0.1, 1.1.0…) et pousser : **publish-plugin** republie tout seul. Sans changement de version, la publication est sautée (Windy refuse une version déjà publiée).
 
 ## Développement
 

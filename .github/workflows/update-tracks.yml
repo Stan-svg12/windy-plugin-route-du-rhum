@@ -8,6 +8,11 @@ on:
         # Pointages officiels toutes les heures, publiés quelques minutes après l'heure
         - cron: '12,42 * * * *'
     workflow_dispatch:
+    push:
+        branches: [main]
+        paths:
+            - 'scripts/update-tracks.mjs'
+            - '.github/workflows/update-tracks.yml'
 
 permissions:
     contents: write
