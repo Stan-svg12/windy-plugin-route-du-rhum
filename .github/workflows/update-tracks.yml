@@ -1,0 +1,37 @@
+name: update-tracks
+
+# Enregistre chaque heure les positions officielles de toute la flotte dans data/tracks.json,
+# lu par le plugin pour dessiner les trajectoires.
+
+on:
+    schedule:
+        # Pointages officiels toutes les heures, publiés quelques minutes après l'heure
+        - cron: '12,42 * * * *'
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+concurrency:
+    group: update-tracks
+    cancel-in-progress: false
+
+jobs:
+    update:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v7
+            - name: Update tracks
+              run: node scripts/update-tracks.mjs
+            - name: Commit
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add data/
+                  if git diff --cached --quiet; then
+                    echo "Aucun nouveau pointage"
+                    exit 0
+                  fi
+                  git commit -m "Pointage $(date -u +'%Y-%m-%d %H:%M') UTC"
+                  git push || (git pull --rebase && git push)
