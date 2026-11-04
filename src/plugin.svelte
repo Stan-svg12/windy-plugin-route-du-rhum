@@ -29,7 +29,7 @@
                         class="rdr-card"
                         class:sel={b.id === selectedId}
                         class:out={!b.racing}
-                        style="--c:{b.classColor}"
+                        style="--c:{b.color}"
                         on:click={() => pick(b.id)}
                     >
                         <span class="rdr-card__rank">{b.racing ? b.rank : '×'}</span>
@@ -114,7 +114,7 @@
                         class="rdr-row"
                         class:sel={b.id === selectedId}
                         class:out={!b.racing}
-                        style="--c:{b.classColor}"
+                        style="--c:{b.color}"
                         on:click={() => pick(b.id)}
                         data-rdr-row={b.id}
                     >
@@ -179,7 +179,7 @@
     import { onDestroy, onMount, tick } from 'svelte';
 
     import { FleetLayer } from './lib/fleetLayer';
-    import { buildFleet, loadRanking, loadTracks } from './lib/data';
+    import { buildFleet, loadBoatColors, loadRanking, loadTracks } from './lib/data';
     import { RANKING_POLL_MS, STORAGE_PREFIX, TRACKS_POLL_MS } from './lib/config';
     import { elapsed, knots, minutesUntil, nm, parisTime, raceDay, statusLabel } from './lib/format';
 
@@ -189,6 +189,8 @@
 
     let fleet: FleetState | null = null;
     let tracks: TracksFile | null = null;
+    let colors: Record<string, string> = {};
+    let colorsKey = '';
     let error: string | null = null;
     let layer: FleetLayer | null = null;
     let selectedClass = 'all';
@@ -419,13 +421,17 @@
         }
         busy = true;
         try {
+            let colorsChanged = false;
             if (force || !tracks || Date.now() - lastTracksFetch > TRACKS_POLL_MS) {
-                tracks = await loadTracks();
+                [tracks, colors] = await Promise.all([loadTracks(), loadBoatColors()]);
                 lastTracksFetch = Date.now();
+                const key = JSON.stringify(colors);
+                colorsChanged = key !== colorsKey;
+                colorsKey = key;
             }
             const { ranking, source } = await loadRanking();
-            const next = buildFleet(ranking, tracks as TracksFile, source);
-            const changed = !fleet || next.maj.getTime() !== fleet.maj.getTime() || force;
+            const next = buildFleet(ranking, tracks as TracksFile, source, colors);
+            const changed = !fleet || next.maj.getTime() !== fleet.maj.getTime() || force || colorsChanged;
             fleet = next;
             error = null;
             lastFetch = new Date();
@@ -814,12 +820,12 @@
         position: relative;
         width: var(--s);
         height: var(--s);
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
     }
     :global(.rdr-boat__hull) {
         width: 100%;
         height: 100%;
         transform-origin: 50% 50%;
+        filter: drop-shadow(0 1px 1.4px rgba(0, 0, 0, 0.6));
     }
     :global(.rdr-boat--out) {
         opacity: 0.6;
@@ -827,16 +833,18 @@
     :global(.rdr-boat--sel)::before {
         content: '';
         position: absolute;
-        inset: -6px;
+        inset: 12%;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.16);
         border: 2px solid #fff;
-        box-shadow: 0 0 0 2px var(--c);
+        box-shadow:
+            0 0 0 2px var(--c),
+            0 0 12px rgba(0, 0, 0, 0.35);
     }
     :global(.rdr-boat--sel)::after {
         content: '';
         position: absolute;
-        inset: -9px;
+        inset: 6%;
         border-radius: 50%;
         border: 2px solid var(--c);
         animation: rdr-pulse 1.8s ease-out infinite;
@@ -853,17 +861,26 @@
     }
     :global(.rdr-boat__label) {
         position: absolute;
-        left: calc(100% + 3px);
+        left: calc(50% + 0.26 * var(--s));
         top: 50%;
         transform: translateY(-50%);
-        white-space: nowrap;
-        font: 700 11px/1.2 'Noto Sans', Arial, sans-serif;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 6px 1px 5px;
+        border-left: 3px solid var(--c);
+        border-radius: 3px;
+        background: rgba(12, 22, 32, 0.74);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font: 600 11px/1.35 'Noto Sans', Arial, sans-serif;
+        letter-spacing: 0.02em;
         color: #fff;
-        text-shadow:
-            0 0 3px #000,
-            0 0 2px #000,
-            0 1px 2px rgba(0, 0, 0, 0.8);
+        white-space: nowrap;
         pointer-events: none;
+    }
+    :global(.rdr-boat__label b) {
+        font-weight: 800;
+        color: rgba(255, 255, 255, 0.72);
     }
     :global(.rdr-mark) {
         background: none !important;

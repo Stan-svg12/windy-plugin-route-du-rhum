@@ -1,0 +1,5 @@
+{
+"v": 1,
+"note": "Couleur de chaque bateau sur la carte, par identifiant course (idCourse). Un bateau absent garde la couleur de sa classe.",
+"colors": {}
+}

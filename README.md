@@ -6,7 +6,7 @@ Les 115 bateaux de la Route du Rhum Destination Guadeloupe 2026 affichés sur la
 
 ## Ce que fait le plugin
 
-1. Position de chaque bateau au dernier pointage officiel, icône orientée au cap (trimaran pour Ultim, Ocean Fifty et Vintage Multi, monocoque pour les autres), couleur de la classe.
+1. Position de chaque bateau au dernier pointage officiel, dessiné vu du dessus selon son type (Ultim, Ocean Fifty et Vintage Multi en trimaran, IMOCA avec ses foils, Class40 à étrave ronde, Vintage Mono), orienté au cap, avec un sillage proportionnel à sa vitesse. Taille adaptée au zoom, noms sans chevauchement.
 2. Trajectoires de toute la flotte depuis le départ.
 3. Classement par classe : rang, gain ou perte de places, distance à l'arrivée, écart au leader, vitesse.
 4. Clic sur un bateau : fiche avec photo, vitesse moyenne 24 h, cap, VMG, position, vent du modèle Windy à l'endroit du bateau, bouton « Météo ici » qui ouvre le picker Windy.
@@ -23,6 +23,8 @@ Les 115 bateaux de la Route du Rhum Destination Guadeloupe 2026 affichés sur la
 | Trajectoires ensuite | `data/tracks.json`, alimenté par le workflow `update-tracks` | À chaque pointage, quelques minutes après sa publication |
 
 Si le site officiel ne répond pas, le plugin affiche le dernier relevé enregistré dans `data/latest.json`. Si GitHub ne répond pas, il utilise les trajectoires embarquées dans le plugin.
+
+Les couleurs des bateaux se règlent dans `data/boats.json` (`"idCourse": "#rrggbb"`). Le plugin relit ce fichier à chaque ouverture puis toutes les 30 minutes : pas besoin de republier. Un bateau absent du fichier garde la couleur de sa classe.
 
 ## Mise en ligne (une seule fois, 3 minutes)
 

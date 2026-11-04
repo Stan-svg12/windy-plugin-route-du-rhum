@@ -1,18 +1,9 @@
 import type { Boat } from './types';
+import { boatSize, boatSvg } from './boatIcons';
 import { FINISH, START } from './config';
 import { deg, escapeHtml, isFinished, knots, latLon, nm, ordinal, statusLabel } from './format';
 
 export type LabelMode = 'none' | 'leaders' | 'all';
-
-const MULTI = new Set(['ultim', 'ocean-fifty', 'vintage-multi']);
-
-/** Coque vue du dessus, étrave vers le haut (cap 0) */
-const monoSvg = (c: string) =>
-    `<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M12 1.6C15 6 16.1 10.6 15.6 22h-7.2C7.9 10.6 9 6 12 1.6z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
-
-/** Trimaran : coque centrale, deux flotteurs, bras de liaison */
-const multiSvg = (c: string) =>
-    `<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M3.6 13.6h16.8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M3.6 13.6h16.8" stroke="${c}" stroke-width="1.2" stroke-linecap="round"/><path d="M3.6 7.2c1.2 2.2 1.5 6.4 1.3 14.2H2.3C2.1 13.6 2.4 9.4 3.6 7.2z" fill="${c}" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"/><path d="M20.4 7.2c1.2 2.2 1.5 6.4 1.3 14.2h-2.6c-.2-7.8.1-12 1.3-14.2z" fill="${c}" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"/><path d="M12 1.2c2.4 4 3.1 9 2.8 21.3H9.2C8.9 10.2 9.6 5.2 12 1.2z" fill="${c}" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 
 /** Points intermédiaires de l'orthodromie (route la plus courte sur la sphère) */
 const greatCircle = (a: { lat: number; lon: number }, b: { lat: number; lon: number }, n = 64) => {
@@ -70,11 +61,34 @@ export class FleetLayer {
     private leaders = new Set<string>();
     private opts: Options;
     private ignoreRemove = false;
+    /** Palier de zoom utilisé pour la taille des icônes */
+    private zoomStep = 5;
+    /** Bateaux dont le nom est affiché, après évitement des chevauchements */
+    private labelled = new Set<string>();
+    /** Zoom exact du dernier calcul des icônes et des étiquettes */
+    private lastZoom = NaN;
+    private onZoom = () => {
+        const z = Number(this.map.getZoom?.());
+        if (z === this.lastZoom) {
+            return;
+        }
+        this.zoomStep = this.currentZoomStep();
+        this.refreshIcons();
+    };
 
     constructor(map: any, opts: Options) {
         this.map = map;
         this.opts = opts;
+        this.zoomStep = this.currentZoomStep();
+        // moveend en secours si la carte n'émet pas zoomend : rien n'est recalculé sans changement de zoom
+        this.map.on?.('zoomend', this.onZoom);
+        this.map.on?.('moveend', this.onZoom);
         this.drawCourse();
+    }
+
+    private currentZoomStep() {
+        const z = Number(this.map.getZoom?.());
+        return Number.isFinite(z) ? Math.max(2, Math.min(9, Math.round(z))) : 5;
     }
 
     private drawCourse() {
@@ -219,7 +233,7 @@ export class FleetLayer {
         const dim = !!this.selected && !sel;
         const out = !b.racing && !isFinished(b.status);
         return {
-            color: out ? '#9aa4ad' : b.classColor,
+            color: out ? '#9aa4ad' : b.color,
             weight: sel ? 3.2 : 1.6,
             opacity: sel ? 1 : dim ? 0.3 : out ? 0.35 : 0.7,
             interactive: true,
@@ -238,12 +252,18 @@ export class FleetLayer {
 
     private icon(b: Boat) {
         const sel = b.id === this.selected;
-        const size = sel ? 30 : MULTI.has(b.classKey) ? 22 : 18;
         const out = !b.racing && !isFinished(b.status);
-        const color = out ? '#8c959e' : b.classColor;
-        const svg = MULTI.has(b.classKey) ? multiSvg(color) : monoSvg(color);
-        const label = this.showLabel(b)
-            ? `<span class="rdr-boat__label">${this.favs.has(b.id) ? '★ ' : ''}${escapeHtml(b.lastName)}</span>`
+        const color = out ? '#8c959e' : b.color;
+        const size = boatSize(b.classKey, this.zoomStep, sel);
+        const svg = boatSvg({
+            classKey: b.classKey,
+            color,
+            speed: b.speed,
+            stopped: !b.racing,
+        });
+        const rank = b.racing && b.rank ? `<b>${b.rank}</b>` : '';
+        const label = this.labelled.has(b.id)
+            ? `<span class="rdr-boat__label">${rank}${this.favs.has(b.id) ? '★ ' : ''}${escapeHtml(b.lastName)}</span>`
             : '';
         const classes = ['rdr-boat', sel ? 'rdr-boat--sel' : '', out ? 'rdr-boat--out' : ''].join(' ');
         return L.divIcon({
@@ -256,7 +276,56 @@ export class FleetLayer {
         });
     }
 
+    /** Position écran d'un point, pour comparer les étiquettes entre elles */
+    private toScreen(lat: number, lon: number): { x: number; y: number } | null {
+        const m = this.map;
+        try {
+            if (typeof m.latLngToContainerPoint === 'function') {
+                return m.latLngToContainerPoint([lat, lon]);
+            }
+            const z = m.getZoom();
+            const c = m.project(m.getCenter(), z);
+            const q = m.project([lat, lon], z);
+            return { x: q.x - c.x, y: q.y - c.y };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Choisit les noms à afficher : sélection et favoris toujours, puis les autres par ordre
+     * de priorité tant qu'ils ne chevauchent pas une étiquette déjà posée.
+     */
+    private computeLabels() {
+        this.labelled.clear();
+        const prio = (b: Boat) =>
+            b.id === this.selected ? -2 : this.favs.has(b.id) ? -1 : (this.leaders.has(b.id) ? 0 : 1000) + b.rank;
+        const candidates = [...this.boats.values()]
+            .filter(b => this.isVisible(b) && this.showLabel(b))
+            .sort((a, b) => prio(a) - prio(b));
+        const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+        for (const b of candidates) {
+            const must = b.id === this.selected || this.favs.has(b.id);
+            const p = this.toScreen(b.lat, b.lon);
+            if (!p) {
+                this.labelled.add(b.id);
+                continue;
+            }
+            const size = boatSize(b.classKey, this.zoomStep, b.id === this.selected);
+            const chars = b.lastName.length + (b.racing && b.rank ? String(b.rank).length + 1 : 0) + (this.favs.has(b.id) ? 2 : 0);
+            const x0 = p.x + 0.26 * size;
+            const r = { x0, y0: p.y - 9, x1: x0 + 14 + chars * 6.8, y1: p.y + 9 };
+            const hit = placed.some(q => r.x0 < q.x1 + 3 && r.x1 + 3 > q.x0 && r.y0 < q.y1 + 1 && r.y1 + 1 > q.y0);
+            if (must || !hit) {
+                placed.push(r);
+                this.labelled.add(b.id);
+            }
+        }
+    }
+
     private refreshIcons() {
+        this.lastZoom = Number(this.map.getZoom?.());
+        this.computeLabels();
         for (const [id, b] of this.boats) {
             const m = this.markers.get(id);
             m.setIcon(this.icon(b));
@@ -440,6 +509,8 @@ export class FleetLayer {
     }
 
     destroy() {
+        this.map.off?.('zoomend', this.onZoom);
+        this.map.off?.('moveend', this.onZoom);
         this.closePopup();
         for (const layer of this.onMap) {
             this.map.removeLayer(layer);

@@ -1,6 +1,6 @@
 {
     "name": "windy-plugin-route-du-rhum",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Plugin Windy : positions, trajectoires et classement de la Route du Rhum 2026 en direct",
     "main": "dist/plugin.min.js",
     "type": "module",

@@ -71,6 +71,8 @@ export interface Boat {
     classKey: string;
     className: string;
     classColor: string;
+    /** Couleur du bateau sur la carte : celle de l'équipe si connue, sinon celle de la classe */
+    color: string;
     classSize: number;
     status: string;
     racing: boolean;
