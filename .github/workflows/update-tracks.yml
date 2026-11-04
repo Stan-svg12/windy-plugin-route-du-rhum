@@ -1,12 +1,18 @@
 name: update-tracks
 
-# Enregistre chaque heure les positions officielles de toute la flotte dans data/tracks.json,
+# Enregistre les positions officielles de toute la flotte dans data/tracks.json,
 # lu par le plugin pour dessiner les trajectoires.
+#
+# Fonctionnement en relais, sans dépendre du cron de GitHub (souvent en retard ou sauté) :
+# chaque exécution réserve tout de suite la suivante (workflow_dispatch), surveille le flux
+# officiel pendant 55 minutes et enregistre chaque pointage dès sa publication.
+# Le groupe de concurrence garantit une seule exécution active et une seule en attente.
+# Le cron n'est qu'un filet de sécurité si le relais venait à s'arrêter.
+# Le relais s'arrête seul quand plus aucun bateau n'est en course.
 
 on:
     schedule:
-        # Pointages officiels toutes les heures, publiés quelques minutes après l'heure
-        - cron: '12,42 * * * *'
+        - cron: '17 */3 * * *'
     workflow_dispatch:
     push:
         branches: [main]
@@ -16,6 +22,7 @@ on:
 
 permissions:
     contents: write
+    actions: write
 
 concurrency:
     group: update-tracks
@@ -24,19 +31,73 @@ concurrency:
 jobs:
     update:
         runs-on: ubuntu-latest
-        timeout-minutes: 5
+        timeout-minutes: 75
+        env:
+            GH_TOKEN: ${{ github.token }}
+            GH_REPO: ${{ github.repository }}
+            WATCH_MINUTES: 55
+            POLL_SECONDS: 150
+            RELAY_END: '2026-12-20T00:00:00Z'
         steps:
             - uses: actions/checkout@v7
-            - name: Update tracks
-              run: node scripts/update-tracks.mjs
-            - name: Commit
+
+            - name: Réserver le relais suivant
+              run: |
+                  CONTINUE=$(node -e '
+                    const fs = require("fs");
+                    let r = {};
+                    try { r = JSON.parse(fs.readFileSync("data/latest.json", "utf8")); } catch {}
+                    const racing = (r.classes || []).some(c => (c.lignes || []).some(l => l.statut === "RAC"));
+                    const beforeEnd = Date.now() < Date.parse(process.env.RELAY_END);
+                    console.log(beforeEnd && (racing || !r.classes) ? "yes" : "no");
+                  ')
+                  if [ "$CONTINUE" != "yes" ]; then
+                    echo "::notice title=Relais arrêté::Plus aucun bateau en course, pas d'exécution suivante."
+                    exit 0
+                  fi
+                  for i in 1 2 3; do
+                    if gh workflow run update-tracks.yml --ref main; then
+                      echo "Exécution suivante réservée"
+                      exit 0
+                    fi
+                    sleep $((i * 15))
+                  done
+                  echo "::warning title=Relais::Exécution suivante non réservée, le cron prendra le relais."
+
+            - name: Surveiller le classement officiel
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  git add data/
-                  if git diff --cached --quiet; then
-                    echo "Aucun nouveau pointage"
-                    exit 0
-                  fi
-                  git commit -m "Pointage $(date -u +'%Y-%m-%d %H:%M') UTC"
-                  git push || (git pull --rebase && git push)
+                  end=$(( $(date +%s) + WATCH_MINUTES * 60 ))
+
+                  # Ajoute le dernier pointage s'il est nouveau. Code 0 seulement si un commit a été créé.
+                  record() {
+                    node scripts/update-tracks.mjs || return 1
+                    git add data/
+                    if git diff --cached --quiet; then
+                      return 1
+                    fi
+                    maj=$(node -p 'require("./data/latest.json").maj' 2>/dev/null || date -u +%FT%TZ)
+                    git commit -q -m "Pointage ${maj}"
+                    return 0
+                  }
+
+                  while :; do
+                    # Repart toujours de l'état du dépôt (code et données) pour ne rien écraser
+                    git fetch -q origin main && git reset -q --hard origin/main
+                    if record; then
+                      for i in 1 2 3; do
+                        if git push -q origin HEAD:main; then
+                          echo "Enregistré : $(git log -1 --format=%s)"
+                          break
+                        fi
+                        sleep 5
+                        git fetch -q origin main && git reset -q --hard origin/main
+                        record || break
+                      done
+                    fi
+                    if [ "$(date +%s)" -ge "$end" ]; then
+                      break
+                    fi
+                    sleep "$POLL_SECONDS"
+                  done

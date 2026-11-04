@@ -20,7 +20,7 @@ Les 115 bateaux de la Route du Rhum Destination Guadeloupe 2026 affichés sur la
 | --- | --- | --- |
 | Classement et positions | Flux public du site officiel `routedurhum.com/_functions/classement`, lu directement par le plugin | Chaque pointage (toutes les heures) |
 | Trajectoires du départ au 3 novembre 15 h UTC | Cartographie officielle (Géovoile), échantillonnée toutes les 3 h, figée dans `scripts/seed-geovoile.txt` | Une fois |
-| Trajectoires ensuite | `data/tracks.json`, alimenté par le workflow `update-tracks` | Toutes les 30 min |
+| Trajectoires ensuite | `data/tracks.json`, alimenté par le workflow `update-tracks` | À chaque pointage, quelques minutes après sa publication |
 
 Si le site officiel ne répond pas, le plugin affiche le dernier relevé enregistré dans `data/latest.json`. Si GitHub ne répond pas, il utilise les trajectoires embarquées dans le plugin.
 
@@ -31,7 +31,7 @@ Si le site officiel ne répond pas, le plugin affiche le dernier relevé enregis
 3. **Secret GitHub** : dans le dépôt, Settings, Secrets and variables, Actions, New repository secret. Nom `WINDY_API_KEY`, valeur la clé de l'étape 2.
 4. **Pousser ce dossier** sur la branche `main`. Deux workflows démarrent seuls :
    **publish-plugin** publie le plugin et écrit son lien dans `PLUGIN_URL.txt` (et dans le résumé du job),
-   **update-tracks** enregistre les positions, puis tourne toutes les 30 minutes.
+   **update-tracks** enregistre chaque pointage dès sa publication. Il tourne en relais (chaque exécution réserve la suivante) jusqu'à l'arrivée du dernier bateau, le cron ne servant que de filet de sécurité.
 
 Si le secret est ajouté après le premier envoi, lancer **publish-plugin** à la main (Actions, publish-plugin, Run workflow).
 Le lien publié a la forme `https://windy-plugins.com/<id>/windy-plugin-route-du-rhum-flotte/1.0.0/plugin.min.js`.
