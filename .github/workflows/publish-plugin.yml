@@ -52,6 +52,8 @@ jobs:
             - name: Publish Plugin
               if: steps.guard.outputs.skip != 'true'
               run: |
+                  # Sans pipefail, un refus de Windy passerait inaperçu derrière tee
+                  set -o pipefail
                   if [ -z "$WINDY_API_KEY" ]; then
                     echo "Secret WINDY_API_KEY is not configured" >&2
                     exit 1
@@ -65,7 +67,7 @@ jobs:
                   echo "Publishing plugin..."
                   curl -s --fail-with-body -XPOST 'https://node.windy.com/plugins/v1.0/upload' -H "x-windy-api-key: ${WINDY_API_KEY}" -F "plugin_archive=@../plugin.tar" | tee /tmp/upload.json
                   echo
-                  URL=$(grep -oE 'https://windy-plugins\.com/[^" ]+plugin\.min\.js' /tmp/upload.json | head -1 || true)
+                  URL=$(sed 's#\\/#/#g' /tmp/upload.json | grep -oE 'https://windy-plugins\.com/[^" ]+plugin\.min\.js' | head -1 || true)
                   echo "PLUGIN_URL=${URL}" >> "$GITHUB_ENV"
                   {
                     echo "## ⛵ Plugin publié"

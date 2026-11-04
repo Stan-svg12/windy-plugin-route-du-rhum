@@ -13,6 +13,7 @@
  *   node scripts/update-tracks.mjs                 met à jour depuis le flux officiel
  *   node scripts/update-tracks.mjs --seed          reconstruit data/tracks.json depuis scripts/seed-geovoile.txt
  *   node scripts/update-tracks.mjs --file x.json   met à jour depuis un fichier local (tests)
+ *   node scripts/update-tracks.mjs --gap x.txt     comble une période avec des points de la cartographie officielle
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -155,6 +156,46 @@ export function appendRanking(tracks, ranking) {
     return added;
 }
 
+/**
+ * Ajoute aux trajectoires des points extraits de la cartographie officielle (grille régulière),
+ * pour combler une période sans relevé horaire. Format identique à scripts/seed-geovoile.txt.
+ */
+export function mergeGap(tracks, file) {
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    const meta = Object.fromEntries(
+        lines[0]
+            .split(' ')
+            .slice(1)
+            .filter(s => s.includes('='))
+            .map(s => s.split('=')),
+    );
+    if (Number(meta.start) !== START_EPOCH) {
+        throw new Error(`Gap start ${meta.start} differs from ${START_EPOCH}`);
+    }
+    const stepMin = Number(meta.stepMin);
+    let added = 0;
+    for (const line of lines.slice(lines.indexOf('DATA') + 1, lines.indexOf('END'))) {
+        const [id, csv] = line.split(':');
+        const v = csv.split(',').map(Number);
+        const gap = [[v[0] * stepMin, v[1], v[2]]];
+        for (let i = 3, k = v[0] + 1; i + 1 < v.length; i += 2, k++) {
+            const prev = gap[gap.length - 1];
+            gap.push([k * stepMin, prev[1] + v[i], prev[2] + v[i + 1]]);
+        }
+        const pts = tracks.boats[id] ? decodeTrack(tracks.boats[id]) : [];
+        const times = new Set(pts.map(p => p[0]));
+        for (const p of gap) {
+            if (!times.has(p[0])) {
+                pts.push(p);
+                added++;
+            }
+        }
+        pts.sort((a, b) => a[0] - b[0]);
+        tracks.boats[id] = encodeTrack(dedupe(pts));
+    }
+    return added;
+}
+
 /** Version allégée du classement, servie en secours au plugin si le site officiel ne répond pas. */
 export function slimRanking(r) {
     return {
@@ -205,7 +246,7 @@ function emptyTracks() {
         prec: PREC,
         lastMaj: null,
         updated: null,
-        sources: 'Cartographie officielle (Géovoile) jusqu’au 3 novembre 2026 15 h UTC, puis classements officiels horaires',
+        sources: 'Cartographie officielle (Géovoile), puis classements officiels horaires',
         boats: {},
     };
 }
@@ -221,7 +262,7 @@ function loadTracks() {
     return t;
 }
 
-function saveJson(file, obj) {
+export function saveJson(file, obj) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     // Une ligne par bateau : diff git lisible et fichier compact
     if (obj.boats) {
@@ -273,6 +314,16 @@ async function main() {
         t.updated = new Date().toISOString();
         saveJson(TRACKS_FILE, t);
         console.log(`Seed: ${Object.keys(t.boats).length} bateaux écrits dans ${TRACKS_FILE}`);
+        return;
+    }
+
+    const gapIdx = args.indexOf('--gap');
+    if (gapIdx >= 0) {
+        const t = loadTracks();
+        const added = mergeGap(t, args[gapIdx + 1]);
+        t.updated = new Date().toISOString();
+        saveJson(TRACKS_FILE, t);
+        console.log(`Comblement : ${added} points ajoutés`);
         return;
     }
 

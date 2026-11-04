@@ -12,7 +12,7 @@ Les 115 bateaux de la Route du Rhum Destination Guadeloupe 2026 affichés sur la
 4. Clic sur un bateau : fiche avec photo, vitesse moyenne 24 h, cap, VMG, position, vent du modèle Windy à l'endroit du bateau, bouton « Météo ici » qui ouvre le picker Windy.
 5. Filtres par classe, recherche par skipper, bateau ou numéro de voile, favoris ★ (gardés dans le navigateur), noms sur la carte (top 3 par classe, tous, aucun).
 6. Actualisation automatique juste après chaque pointage horaire.
-7. Lien direct vers un bateau : `https://www.windy.com/plugin/route-du-rhum/horeau` (nom du skipper, numéro de voile ou identifiant course).
+7. Lien direct vers un bateau : `https://www.windy.com/plugin/route-du-rhum-flotte/horeau` (nom du skipper, numéro de voile ou identifiant course).
 
 ## D'où viennent les données
 
@@ -34,7 +34,7 @@ Si le site officiel ne répond pas, le plugin affiche le dernier relevé enregis
    **update-tracks** enregistre les positions, puis tourne toutes les 30 minutes.
 
 Si le secret est ajouté après le premier envoi, lancer **publish-plugin** à la main (Actions, publish-plugin, Run workflow).
-Le lien publié a la forme `https://windy-plugins.com/<id>/windy-plugin-route-du-rhum/1.0.0/plugin.min.js`.
+Le lien publié a la forme `https://windy-plugins.com/<id>/windy-plugin-route-du-rhum-flotte/1.0.0/plugin.min.js`.
 
 ## Installer et partager
 
@@ -44,7 +44,7 @@ Il faut un compte Windy (gratuit) et être connecté.
 2. Cliquer sur **Charger le plugin directement depuis l'URL**.
 3. Coller le lien `https://windy-plugins.com/.../plugin.min.js` obtenu à la publication.
 
-Le plugin apparaît ensuite dans le menu Windy et s'ouvre aussi par <https://www.windy.com/plugin/route-du-rhum>. Pour les copains : leur envoyer le lien `windy-plugins.com` avec ces trois étapes.
+Le plugin apparaît ensuite dans le menu Windy et s'ouvre aussi par <https://www.windy.com/plugin/route-du-rhum-flotte>. Pour les copains : leur envoyer le lien `windy-plugins.com` avec ces trois étapes.
 
 Le plugin est **privé** (`private: true`) : il n'apparaît pas dans la galerie publique mais s'installe par son lien. Pour le proposer à tous les utilisateurs Windy, passer `private` à `false`, republier, puis le soumettre dans le fil communautaire « List of Finished Windy Plugins (v42+) » où l'équipe Windy le valide.
 
