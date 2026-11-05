@@ -13,3 +13,6 @@ dist/*
 
 # Fichiers de test locaux
 .tmp/
+__pycache__/
+wind.npz
+*.grib2

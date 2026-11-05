@@ -26,6 +26,27 @@ Si le site officiel ne répond pas, le plugin affiche le dernier relevé enregis
 
 Les livrées des bateaux sont dans `data/boats.json`, généré par `node scripts/build-boats.mjs` à partir du relevé `scripts/geovoile-colors.txt` (type de silhouette, couleurs de coque, pont, cockpit, foils ou bras, couleur de trace, par identifiant course). Le plugin relit ce fichier à chaque ouverture puis toutes les 30 minutes : une correction de couleur ne demande pas de republier. Un bateau absent du fichier garde la couleur de sa classe.
 
+## Routage (fork Stan)
+
+Dans la fiche d'un IMOCA ou d'un Class40 (clic sur le bateau), **« 🧭 Afficher le routage »** trace 3 routes. Elles ne s'affichent que pour le bateau sélectionné et disparaissent quand on ferme sa fiche.
+
+| Route | Définition |
+| --- | --- |
+| Optimale (trait blanc) | Route libre la plus rapide |
+| Option Nord (tirets cyan) | Contrainte à passer au moins *x*° au nord de l'optimale au méridien situé à mi-chemin du bateau et de Basse-Terre (◆ = porte) |
+| Option Sud (tirets jaunes) | Idem au sud |
+
+L'écart d'ETA (+x h) est le coût de l'option avec le modèle actuel. Les points sur les routes marquent J+1, J+2… Les fantômes (gros points) se déplacent avec la frise Windy : on voit où serait le bateau, sur chaque route, à l'heure de la carte météo affichée. Au delà des 10 jours du modèle, la route passe en pointillés pâles et le dernier champ de vent est conservé.
+
+**Chaîne de calcul** (`.github/workflows/routing.yml`, toutes les 3 h) :
+1. `routing/fetch_wind.py` : vent à 10 m du dernier run ECMWF IFS 0,25° open data (00/12 UTC, 240 h), découpé sur l'Atlantique. Il n'est retéléchargé que si un nouveau run est sorti.
+2. `routing/run_routing.py` : isochrones (`routing/engine.py`) depuis la position de chaque bateau au dernier pointage. Pas de 1 h puis 3 h, 72 caps, évitement des terres (masque 1 km), perte de temps à chaque virement ou empannage, arrivée par le tour de Basse-Terre (nord, côte sous le vent, Vieux-Fort, ligne).
+3. Écriture de `data/routes.json`, lu par le plugin.
+
+**Polaires** : `polars/imoca.csv` et `polars/class40.csv` sont des polaires génériques provisoires. Pour un bateau donné, déposer `polars/boats/<idCourse>.csv` (format texte TWA × TWS, `;` `,` ou tabulation, comme un export .pol). Le coefficient `perf` (part de la polaire tenue en solitaire) et la perte par manœuvre se règlent dans `polars/config.json`. Chaque push dans `polars/` relance le calcul.
+
+Test local : `pip install -r routing/requirements.txt`, puis `python routing/fetch_wind.py --out wind.npz` et `python routing/run_routing.py --wind wind.npz`. Un GRIB perso se passe avec `--grib`.
+
 ## Mise en ligne (une seule fois, 3 minutes)
 
 1. **Créer le dépôt** public `windy-plugin-route-du-rhum` sur GitHub (vide, sans README). Il doit être public : le plugin y lit les trajectoires.

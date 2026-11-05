@@ -1,0 +1,33 @@
+{
+  "_doc": "perf = part de la polaire tenue en course (solitaire). maneuver_min = minutes perdues par virement/empannage. Une polaire par bateau se dépose dans polars/boats/<idCourse>.csv (idCourse = identifiant course du classement officiel) et remplace celle de la classe.",
+  "classes": {
+    "imoca": {
+      "polar": "imoca.csv",
+      "perf": 0.85,
+      "maneuver_min": 10
+    },
+    "class40": {
+      "polar": "class40.csv",
+      "perf": 0.9,
+      "maneuver_min": 6
+    }
+  },
+  "option_offset_deg": null,
+  "waypoints": {
+    "_doc": "Arrivée : on contourne Basse-Terre par le nord, côte sous le vent, Vieux-Fort, puis ligne de Pointe-à-Pitre",
+    "points": [
+      [
+        16.42,
+        -61.9
+      ],
+      [
+        15.9,
+        -61.76
+      ],
+      [
+        16.205,
+        -61.535
+      ]
+    ]
+  }
+}

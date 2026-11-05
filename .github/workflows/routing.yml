@@ -1,0 +1,93 @@
+name: routing
+
+# Routage des IMOCA et Class40 : 3 options (Optimale, Nord, Sud) par bateau, écrites dans data/routes.json.
+# Toutes les 3 h : repart des positions du dernier pointage. Le GRIB ECMWF (open data, 0,25°, 240 h)
+# n'est retéléchargé que lorsqu'un nouveau run 00 ou 12 UTC est publié (cache GitHub).
+
+on:
+    schedule:
+        - cron: '40 */3 * * *'
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths:
+            - 'routing/**'
+            - 'polars/**'
+            - '.github/workflows/routing.yml'
+
+permissions:
+    contents: write
+
+concurrency:
+    group: routing
+    cancel-in-progress: false
+
+jobs:
+    route:
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        env:
+            RACE_END: '2026-12-20T00:00:00Z'
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Course en cours ?
+              id: live
+              run: |
+                  if [ "$(date -u +%s)" -ge "$(date -u -d "$RACE_END" +%s)" ]; then
+                    echo "::notice::Course terminée, pas de routage."
+                    echo "go=false" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "go=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - uses: actions/setup-python@v5
+              if: steps.live.outputs.go == 'true'
+              with:
+                  python-version: '3.12'
+                  cache: pip
+                  cache-dependency-path: routing/requirements.txt
+
+            - name: Dépendances
+              if: steps.live.outputs.go == 'true'
+              run: pip install -r routing/requirements.txt
+
+            - name: Dernier run ECMWF
+              if: steps.live.outputs.go == 'true'
+              id: run
+              run: echo "id=$(python routing/fetch_wind.py --latest-run)" >> "$GITHUB_OUTPUT"
+
+            - name: Cache du vent
+              if: steps.live.outputs.go == 'true'
+              id: cache
+              uses: actions/cache@v4
+              with:
+                  path: wind.npz
+                  key: ecmwf-wind-${{ steps.run.outputs.id }}
+
+            - name: Téléchargement ECMWF
+              if: steps.live.outputs.go == 'true' && steps.cache.outputs.cache-hit != 'true'
+              run: python routing/fetch_wind.py --out wind.npz && rm -f ecmwf.grib2
+
+            - name: Routage
+              if: steps.live.outputs.go == 'true'
+              run: python routing/run_routing.py --wind wind.npz
+
+            - name: Publication
+              if: steps.live.outputs.go == 'true'
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add data/routes.json
+                  if git diff --cached --quiet; then
+                    echo "Routes inchangées"
+                    exit 0
+                  fi
+                  git commit -q -m "Routage $(python -c 'import json;d=json.load(open("data/routes.json"));print(d["maj"], "·", d["model"])')"
+                  # Le relais update-tracks pousse souvent : on se rebase sur lui (fichiers distincts)
+                  for i in 1 2 3 4 5; do
+                    git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+                    sleep $((i * 10))
+                  done
+                  echo "::error::Impossible de pousser data/routes.json"
+                  exit 1

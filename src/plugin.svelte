@@ -180,7 +180,9 @@
 
     import { FleetLayer } from './lib/fleetLayer';
     import { buildFleet, loadBoatLooks, loadRanking, loadTracks } from './lib/data';
-    import { RANKING_POLL_MS, STORAGE_PREFIX, TRACKS_POLL_MS } from './lib/config';
+    import { RANKING_POLL_MS, ROUTED_CLASSES, STORAGE_PREFIX, TRACKS_POLL_MS } from './lib/config';
+    import { RoutingLayer, loadRoutes, routingHtml } from './lib/routing';
+    import type { RoutesFile } from './lib/routing';
     import { elapsed, knots, minutesUntil, nm, parisTime, raceDay, statusLabel } from './lib/format';
 
     import type { LabelMode } from './lib/fleetLayer';
@@ -206,6 +208,79 @@
     let busy = false;
     let firstFit = true;
     let timers: ReturnType<typeof setInterval>[] = [];
+
+    /* Routage : affiché seulement à la demande, depuis la bulle du bateau sélectionné */
+    let routing: RoutingLayer | null = null;
+    let routes: RoutesFile | null = null;
+    let routesAt = 0;
+    let routedId: string | null = null;
+    let routeState: 'off' | 'loading' | 'error' | 'on' = 'off';
+    let lastWind: string | null = null;
+    let tsListener: number | null = null;
+
+    const popupExtra = (b: Boat): string =>
+        b.racing && ROUTED_CLASSES.includes(b.classKey)
+            ? routingHtml(
+                  b.id,
+                  b.id === routedId ? routeState : 'off',
+                  routes ? routes.boats[b.idCourse] || null : null,
+                  routes,
+                  b.classKey,
+              )
+            : '';
+
+    const hideRoute = () => {
+        routing?.hide();
+        routedId = null;
+        routeState = 'off';
+    };
+
+    const drawRoute = (b: Boat) => {
+        const r = routes ? routes.boats[b.idCourse] : null;
+        if (routes && r && !r.skip && r.opts.length) {
+            routing?.show(r, routes.horizon);
+            routing?.setTime(store.get('timestamp'));
+        } else {
+            routing?.hide();
+        }
+    };
+
+    const ensureRoutes = async (force = false) => {
+        if (!force && routes && Date.now() - routesAt < TRACKS_POLL_MS) {
+            return;
+        }
+        routes = await loadRoutes();
+        routesAt = Date.now();
+    };
+
+    const toggleRoute = async (id: string) => {
+        const b = layer?.getBoat(id);
+        if (!b || !layer) {
+            return;
+        }
+        if (routedId === id) {
+            hideRoute();
+            layer.refreshPopup(lastWind);
+            return;
+        }
+        routedId = id;
+        routeState = 'loading';
+        layer.refreshPopup(lastWind);
+        try {
+            await ensureRoutes();
+            if (routedId !== id) {
+                return;
+            }
+            routeState = routes ? 'on' : 'error';
+            drawRoute(b);
+        } catch (e) {
+            console.warn('[route-du-rhum] Routage indisponible', e);
+            if (routedId === id) {
+                routeState = 'error';
+            }
+        }
+        layer?.refreshPopup(lastWind);
+    };
 
     /* Préférences de l'utilisateur, conservées dans son navigateur */
     const readPref = <T>(key: string, fallback: T): T => {
@@ -342,6 +417,7 @@
     const showWind = async (b: Boat) => {
         const wind = await windAt(b.lat, b.lon);
         if (wind && layer && layer.selectedId === b.id) {
+            lastWind = wind;
             layer.openPopup(b, wind);
         }
     };
@@ -351,7 +427,13 @@
     };
 
     const onSelect = async (id: string | null) => {
+        if (id !== selectedId) {
+            lastWind = null;
+        }
         selectedId = id;
+        if (id !== routedId) {
+            hideRoute();
+        }
         if (!id || !layer) {
             return;
         }
@@ -384,11 +466,19 @@
 
     /** Clic sur "Météo ici" dans la bulle d'un bateau : ouvre le picker météo Windy */
     const onDocClick = (e: MouseEvent) => {
-        const el = (e.target as HTMLElement | null)?.closest?.('[data-rdr-action="weather"]') as HTMLElement | null;
+        const el = (e.target as HTMLElement | null)?.closest?.('[data-rdr-action]') as HTMLElement | null;
         if (!el || !layer) {
             return;
         }
         e.preventDefault();
+        if (el.dataset.rdrAction === 'route') {
+            e.stopPropagation();
+            toggleRoute(el.dataset.rdrId || '');
+            return;
+        }
+        if (el.dataset.rdrAction !== 'weather') {
+            return;
+        }
         const b = layer.getBoat(el.dataset.rdrId || '');
         if (!b) {
             return;
@@ -453,6 +543,20 @@
                 if (sel) {
                     showWind(sel);
                 }
+                // Routage affiché : on reprend le dernier calcul publié
+                if (routeState === 'on' && routedId && Date.now() - routesAt > TRACKS_POLL_MS) {
+                    const rb = layer.getBoat(routedId);
+                    ensureRoutes(true)
+                        .then(() => {
+                            if (rb && routedId === rb.id) {
+                                drawRoute(rb);
+                                layer?.refreshPopup(lastWind);
+                            }
+                        })
+                        .catch(() => {
+                            /* on garde le routage précédent */
+                        });
+                }
             }
         } catch (e) {
             console.error('[route-du-rhum]', e);
@@ -487,7 +591,9 @@
         labelMode = readPref<LabelMode>('labels', 'leaders');
         favs = new Set(readPref<string[]>('favs', []));
 
-        layer = new FleetLayer(map, { onSelect, freeArea, mobile: isMobileOrTablet });
+        layer = new FleetLayer(map, { onSelect, freeArea, mobile: isMobileOrTablet, popupExtra });
+        routing = new RoutingLayer(map);
+        tsListener = store.on('timestamp', (ts: number) => routing?.setTime(ts));
         layer.setShowTracks(showTracks);
         layer.setLabelMode(labelMode);
         layer.setFavorites(favs);
@@ -501,6 +607,11 @@
         timers.forEach(clearInterval);
         timers = [];
         document.removeEventListener('click', onDocClick, true);
+        if (tsListener !== null) {
+            store.off(tsListener);
+        }
+        routing?.hide();
+        routing = null;
         layer?.destroy();
         layer = null;
     });
@@ -993,6 +1104,70 @@
         margin-top: 8px;
         font-weight: 700;
         font-size: 12px;
+    }
+    :global(.rdr-route) {
+        margin-top: 8px;
+        padding-top: 7px;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        font-size: 12px;
+    }
+    :global(.rdr-route__btn) {
+        display: inline-block;
+        margin-top: 4px;
+        font-weight: 700;
+        color: #1769c1;
+        text-decoration: none;
+    }
+    :global(.rdr-route__msg) {
+        display: block;
+        color: #666;
+    }
+    :global(.rdr-route__title) {
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+    :global(.rdr-route__grid) {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    :global(.rdr-route__grid td) {
+        padding: 2px 0;
+        vertical-align: top;
+    }
+    :global(.rdr-route__grid td:first-child) {
+        white-space: nowrap;
+        padding-right: 8px;
+        color: #555;
+    }
+    :global(.rdr-route__grid i) {
+        display: inline-block;
+        width: 14px;
+        height: 4px;
+        margin: 0 5px 2px 0;
+        border-radius: 2px;
+        background: var(--rc);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+    }
+    :global(.rdr-route__grid small),
+    :global(.rdr-route__meta) {
+        color: #777;
+        font-size: 11px;
+    }
+    :global(.rdr-route__meta) {
+        margin-top: 4px;
+        line-height: 1.35;
+    }
+    :global(.rdr-route-day) {
+        color: #fff;
+        font: 700 10px/14px sans-serif;
+        text-shadow: 0 0 3px #000, 0 0 2px #000;
+        white-space: nowrap;
+    }
+    :global(.rdr-route-gate span) {
+        color: var(--rc);
+        font-size: 13px;
+        line-height: 14px;
+        text-shadow: 0 0 2px #000, 0 0 2px #000;
     }
     :global(.rdr-pop__actions a) {
         color: #1769c1;

@@ -42,6 +42,8 @@ interface Options {
     /** Zone de l'écran non couverte par l'interface du plugin */
     freeArea: () => FreeArea;
     mobile: boolean;
+    /** HTML ajouté à la bulle d'un bateau (routage) */
+    popupExtra?: (b: Boat) => string;
 }
 
 export class FleetLayer {
@@ -403,6 +405,7 @@ export class FleetLayer {
     <tr><td>Position</td><td>${latLon(b.lat, b.lon)}</td></tr>
     ${wind ? `<tr><td>Vent carte</td><td><b>${wind}</b></td></tr>` : ''}
   </table>
+  ${this.opts.popupExtra ? this.opts.popupExtra(b) : ''}
   <div class="rdr-pop__actions">
     <a href="#" data-rdr-action="weather" data-rdr-id="${escapeHtml(b.id)}">☁ Météo ici</a>
     ${b.profileUrl ? `<a href="${escapeHtml(b.profileUrl)}" target="_blank" rel="noopener">Fiche skipper ↗</a>` : ''}
@@ -439,6 +442,14 @@ export class FleetLayer {
                 }
             }
         });
+    }
+
+    /** Redessine le contenu de la bulle ouverte (ex. après chargement du routage) */
+    refreshPopup(wind: string | null = null) {
+        const b = this.selected ? this.boats.get(this.selected) : null;
+        if (this.popup && b) {
+            this.popup.setContent(this.popupHtml(b, wind));
+        }
     }
 
     /** Ferme la bulle en gardant le bateau sélectionné (avant d'ouvrir la météo Windy) */

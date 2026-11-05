@@ -11,6 +11,10 @@ export const HAS_REPO = /^[\w.-]+\/[\w.-]+$/.test(REPO);
 const RAW = HAS_REPO ? `https://raw.githubusercontent.com/${REPO}/main/data` : '';
 export const TRACKS_URL = HAS_REPO ? `${RAW}/tracks.json` : '';
 export const LATEST_URL = HAS_REPO ? `${RAW}/latest.json` : '';
+/** Routages (3 options par IMOCA et Class40), recalculés toutes les 3 h par le workflow « routing » */
+export const ROUTES_URL = HAS_REPO ? `${RAW}/routes.json` : '';
+/** Classes routées (polaires disponibles) */
+export const ROUTED_CLASSES = ['imoca', 'class40'];
 /** Couleurs des bateaux, modifiables sans republier le plugin */
 export const BOATS_URL = HAS_REPO ? `${RAW}/boats.json` : '';
 
