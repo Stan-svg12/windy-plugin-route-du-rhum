@@ -76,6 +76,68 @@ def download(target, workers=8):
     return run
 
 
+# ----------------------------------------------------------------------------- GFS (secours)
+
+NOMADS = 'https://nomads.ncep.noaa.gov'
+GFS_STEPS = list(range(0, 121, 3)) + list(range(126, 241, 6))
+
+
+def _get(url, timeout=60):
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={'user-agent': 'windy-plugin-route-du-rhum routage'})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def gfs_latest():
+    now = dt.datetime.now(dt.timezone.utc)
+    cyc = now.replace(minute=0, second=0, microsecond=0, hour=now.hour - now.hour % 6)
+    for k in range(6):
+        c = cyc - dt.timedelta(hours=6 * k)
+        idx = (f'{NOMADS}/pub/data/nccf/com/gfs/prod/gfs.{c:%Y%m%d}/{c:%H}/atmos/'
+               f'gfs.t{c:%H}z.pgrb2.0p25.f240.idx')
+        try:
+            _get(idx, timeout=20)
+            return c
+        except Exception:
+            continue
+    raise RuntimeError('Aucun run GFS complet trouvé')
+
+
+def download_gfs(target, workers=4):
+    """GFS 0,25° via le filtre NOMADS : uniquement le vent à 10 m sur l'Atlantique, quelques centaines de ko."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    c = gfs_latest()
+    print(f'Secours GFS : run {c:%Y-%m-%d %H}Z', flush=True)
+
+    def one(step):
+        url = (f'{NOMADS}/cgi-bin/filter_gfs_0p25.pl?dir=%2Fgfs.{c:%Y%m%d}%2F{c:%H}%2Fatmos'
+               f'&file=gfs.t{c:%H}z.pgrb2.0p25.f{step:03d}&var_UGRD=on&var_VGRD=on&lev_10_m_above_ground=on'
+               f'&subregion=&toplat=56&bottomlat=-1&leftlon=279&rightlon=359.75')
+        last = None
+        for attempt in range(5):
+            try:
+                data = _get(url)
+                if not data.startswith(b'GRIB'):
+                    raise RuntimeError('réponse non GRIB')
+                print(f'  GFS +{step:3d} h ok', flush=True)
+                return data
+            except Exception as e:
+                last = e
+                time.sleep(5 * (attempt + 1))
+        raise RuntimeError(f'GFS échéance {step} h : {last}')
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        parts = list(ex.map(one, GFS_STEPS))
+    with open(target, 'wb') as out:
+        for d in parts:
+            out.write(d)
+    return c
+
+
 def read_grib(path, label=''):
     import eccodes
 
@@ -135,13 +197,28 @@ def main():
         print(latest_run()[0].strftime('%Y%m%dT%H'))
         return
     grib = a.grib
+    label = ''
     if not grib:
+        # ECMWF d'abord, avec un budget de temps ; GFS (NOMADS, fichiers légers) si ECMWF traîne ou échoue
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FTimeout
+
         grib = 'ecmwf.grib2'
-        download(grib)
-    w, base = read_grib(grib)
+        ex = ThreadPoolExecutor(max_workers=1)
+        fut = ex.submit(download, grib)
+        try:
+            fut.result(timeout=float(os.environ.get('ECMWF_BUDGET_S', 420)))
+        except (FTimeout, Exception) as e:
+            print(f'::warning::ECMWF indisponible ou trop lent ({type(e).__name__}: {e}), bascule sur GFS', flush=True)
+            grib = 'gfs.grib2'
+            c = download_gfs(grib)
+            label = f'GFS 0.25° {c:%Y-%m-%d %H}Z'
+        ex.shutdown(wait=False, cancel_futures=True)
+    w, base = read_grib(grib, label)
     w.save(a.out)
     print(f'{w.label} : {len(w.times)} échéances, {len(w.lats)}x{len(w.lons)} points, '
-          f'horizon {dt.datetime.fromtimestamp(w.horizon, dt.timezone.utc):%Y-%m-%d %H}Z -> {a.out}')
+          f'horizon {dt.datetime.fromtimestamp(w.horizon, dt.timezone.utc):%Y-%m-%d %H}Z -> {a.out}', flush=True)
+    # Des téléchargements ECMWF abandonnés peuvent encore tourner : on sort sans les attendre
+    os._exit(0)
 
 
 if __name__ == '__main__':

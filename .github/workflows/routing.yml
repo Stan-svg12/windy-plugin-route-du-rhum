@@ -67,8 +67,8 @@ jobs:
 
             - name: Téléchargement ECMWF
               if: steps.live.outputs.go == 'true' && steps.cache.outputs.cache-hit != 'true'
-              timeout-minutes: 15
-              run: python routing/fetch_wind.py --out wind.npz && rm -f ecmwf.grib2
+              timeout-minutes: 20
+              run: python routing/fetch_wind.py --out wind.npz && rm -f ecmwf.grib2 gfs.grib2
 
             - name: Routage
               if: steps.live.outputs.go == 'true'
