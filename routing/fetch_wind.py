@@ -40,10 +40,39 @@ def latest_run():
     raise RuntimeError(f'Aucune source ECMWF disponible : {last}')
 
 
-def download(target):
+def download(target, workers=8):
+    """Une requête par échéance, en parallèle, avec nouvelles tentatives : bien plus rapide et robuste."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
     run, src = latest_run()
-    _client(src).retrieve(date=run.strftime('%Y%m%d'), time=run.hour, type='fc', step=STEPS, param=['10u', '10v'],
-                          target=target)
+    print(f'Run {run:%Y-%m-%d %H}Z, source {src}, {len(STEPS)} échéances', flush=True)
+    parts_dir = target + '.parts'
+    os.makedirs(parts_dir, exist_ok=True)
+
+    def one(step):
+        path = os.path.join(parts_dir, f'{step:03d}.grib2')
+        last = None
+        for attempt in range(4):
+            for s in (src,) + tuple(x for x in SOURCES if x != src):
+                try:
+                    _client(s).retrieve(date=run.strftime('%Y%m%d'), time=run.hour, type='fc', step=step,
+                                        param=['10u', '10v'], target=path)
+                    print(f'  +{step:3d} h ok ({s})', flush=True)
+                    return path
+                except Exception as e:
+                    last = e
+            time.sleep(5 * (attempt + 1))
+        raise RuntimeError(f'Échéance {step} h introuvable : {last}')
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        parts = list(ex.map(one, STEPS))
+    with open(target, 'wb') as out:
+        for path in parts:
+            with open(path, 'rb') as f:
+                out.write(f.read())
+            os.remove(path)
+    os.rmdir(parts_dir)
     return run
 
 

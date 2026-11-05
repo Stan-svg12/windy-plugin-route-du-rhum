@@ -25,7 +25,7 @@ concurrency:
 jobs:
     route:
         runs-on: ubuntu-latest
-        timeout-minutes: 40
+        timeout-minutes: 30
         env:
             RACE_END: '2026-12-20T00:00:00Z'
         steps:
@@ -67,6 +67,7 @@ jobs:
 
             - name: Téléchargement ECMWF
               if: steps.live.outputs.go == 'true' && steps.cache.outputs.cache-hit != 'true'
+              timeout-minutes: 15
               run: python routing/fetch_wind.py --out wind.npz && rm -f ecmwf.grib2
 
             - name: Routage
