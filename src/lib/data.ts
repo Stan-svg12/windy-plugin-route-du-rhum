@@ -1,5 +1,5 @@
 import { BOAT_COLORS } from './boatColors';
-import type { Boat, FleetClass, FleetState, Ranking, RankingLine, TracksFile } from './types';
+import type { Boat, BoatLooks, BoatStyle, FleetClass, FleetState, Ranking, RankingLine, TracksFile } from './types';
 import { BOATS_URL, HAS_REPO, LATEST_URL, PHOTO_BASE, RANKING_URL, SITE_URL, TRACKS_URL } from './config';
 import { SEED_TRACKS } from './seedTracks';
 import { isFinished, isRacing, prettyName } from './format';
@@ -44,11 +44,13 @@ export const loadRanking = async (): Promise<{ ranking: Ranking; source: 'offici
 };
 
 /** Seules des couleurs hexadécimales sont acceptées : elles finissent dans du SVG et du CSS */
+const isHex = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v.trim());
+
 const cleanColors = (raw: unknown): Record<string, string> => {
     const out: Record<string, string> = {};
     if (raw && typeof raw === 'object') {
         for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-            if (typeof v === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v.trim())) {
+            if (isHex(v)) {
                 out[String(k)] = v.trim();
             }
         }
@@ -56,17 +58,32 @@ const cleanColors = (raw: unknown): Record<string, string> => {
     return out;
 };
 
-/** Couleurs des bateaux publiées dans le dépôt (data/boats.json), sinon celles embarquées */
-export const loadBoatColors = async (): Promise<Record<string, string>> => {
+const cleanStyles = (raw: unknown): Record<string, BoatStyle> => {
+    const out: Record<string, BoatStyle> = {};
+    if (raw && typeof raw === 'object') {
+        for (const [k, v] of Object.entries(raw as Record<string, any>)) {
+            const type = Number(v && v.t);
+            const colors = Array.isArray(v && v.c) ? v.c.filter(isHex).slice(0, 4).map((c: string) => c.trim()) : [];
+            if (Number.isInteger(type) && type >= 1 && type <= 5 && colors.length >= 1) {
+                out[String(k)] = { type, colors, main: isHex(v.m) ? v.m.trim() : colors[0] };
+            }
+        }
+    }
+    return out;
+};
+
+/** Livrées des bateaux publiées dans le dépôt (data/boats.json), sinon couleurs des classes */
+export const loadBoatLooks = async (): Promise<BoatLooks> => {
+    const fallback: BoatLooks = { colors: BOAT_COLORS, styles: {} };
     if (!HAS_REPO) {
-        return BOAT_COLORS;
+        return fallback;
     }
     try {
-        const d = await fetchJson<{ colors?: unknown }>(bust(BOATS_URL));
-        return { ...BOAT_COLORS, ...cleanColors(d && d.colors) };
+        const d = await fetchJson<{ colors?: unknown; boats?: unknown }>(bust(BOATS_URL));
+        return { colors: { ...BOAT_COLORS, ...cleanColors(d && d.colors) }, styles: cleanStyles(d && d.boats) };
     } catch (e) {
-        console.warn('[route-du-rhum] Couleurs des bateaux indisponibles, couleurs des classes utilisées', e);
-        return BOAT_COLORS;
+        console.warn('[route-du-rhum] Livrées des bateaux indisponibles, couleurs des classes utilisées', e);
+        return fallback;
     }
 };
 
@@ -111,7 +128,7 @@ const toBoat = (
     l: RankingLine,
     cls: { cle: string; nom: string; couleur: string; partants: number },
     tracks: TracksFile,
-    colors: Record<string, string>,
+    looks: BoatLooks,
 ): Boat | null => {
     const track = decodeTrack(tracks.boats[String(l.idCourse)], tracks.prec);
     let lat = l.lat;
@@ -143,7 +160,8 @@ const toBoat = (
         classKey: cls.cle,
         className: cls.nom,
         classColor: cls.couleur,
-        color: colors[String(l.idCourse)] || cls.couleur,
+        color: looks.styles[String(l.idCourse)]?.main || looks.colors[String(l.idCourse)] || cls.couleur,
+        style: looks.styles[String(l.idCourse)] || null,
         classSize: cls.partants,
         status: l.statut || 'RAC',
         racing: isRacing(l.statut || 'RAC'),
@@ -168,11 +186,11 @@ export const buildFleet = (
     ranking: Ranking,
     tracks: TracksFile,
     source: 'officiel' | 'secours',
-    colors: Record<string, string> = BOAT_COLORS,
+    looks: BoatLooks = { colors: BOAT_COLORS, styles: {} },
 ): FleetState => {
     const classes: FleetClass[] = ranking.classes.map(c => {
         const boats = c.lignes
-            .map(l => toBoat(l, c, tracks, colors))
+            .map(l => toBoat(l, c, tracks, looks))
             .filter((b): b is Boat => !!b)
             .sort((a, b) => statusOrder(a) - statusOrder(b) || a.rank - b.rank);
         return { key: c.cle, name: c.nom, color: c.couleur, size: c.partants, boats };

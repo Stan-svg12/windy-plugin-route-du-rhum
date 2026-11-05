@@ -234,8 +234,8 @@ export class FleetLayer {
         const out = !b.racing && !isFinished(b.status);
         return {
             color: out ? '#9aa4ad' : b.color,
-            weight: sel ? 3.2 : 1.6,
-            opacity: sel ? 1 : dim ? 0.3 : out ? 0.35 : 0.7,
+            weight: sel ? 3.2 : 1.4,
+            opacity: sel ? 1 : dim ? 0.22 : out ? 0.3 : 0.6,
             interactive: true,
         };
     }
@@ -254,12 +254,14 @@ export class FleetLayer {
         const sel = b.id === this.selected;
         const out = !b.racing && !isFinished(b.status);
         const color = out ? '#8c959e' : b.color;
-        const size = boatSize(b.classKey, this.zoomStep, sel);
+        const size = boatSize(b.classKey, b.style?.type, this.zoomStep, sel);
         const svg = boatSvg({
             classKey: b.classKey,
             color,
+            style: b.style,
             speed: b.speed,
             stopped: !b.racing,
+            greyed: out,
         });
         const rank = b.racing && b.rank ? `<b>${b.rank}</b>` : '';
         const label = this.labelled.has(b.id)
@@ -311,7 +313,7 @@ export class FleetLayer {
                 this.labelled.add(b.id);
                 continue;
             }
-            const size = boatSize(b.classKey, this.zoomStep, b.id === this.selected);
+            const size = boatSize(b.classKey, b.style?.type, this.zoomStep, b.id === this.selected);
             const chars = b.lastName.length + (b.racing && b.rank ? String(b.rank).length + 1 : 0) + (this.favs.has(b.id) ? 2 : 0);
             const x0 = p.x + 0.26 * size;
             const r = { x0, y0: p.y - 9, x1: x0 + 14 + chars * 6.8, y1: p.y + 9 };

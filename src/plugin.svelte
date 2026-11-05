@@ -179,18 +179,18 @@
     import { onDestroy, onMount, tick } from 'svelte';
 
     import { FleetLayer } from './lib/fleetLayer';
-    import { buildFleet, loadBoatColors, loadRanking, loadTracks } from './lib/data';
+    import { buildFleet, loadBoatLooks, loadRanking, loadTracks } from './lib/data';
     import { RANKING_POLL_MS, STORAGE_PREFIX, TRACKS_POLL_MS } from './lib/config';
     import { elapsed, knots, minutesUntil, nm, parisTime, raceDay, statusLabel } from './lib/format';
 
     import type { LabelMode } from './lib/fleetLayer';
-    import type { Boat, FleetState, TracksFile } from './lib/types';
+    import type { Boat, BoatLooks, FleetState, TracksFile } from './lib/types';
 
 
     let fleet: FleetState | null = null;
     let tracks: TracksFile | null = null;
-    let colors: Record<string, string> = {};
-    let colorsKey = '';
+    let looks: BoatLooks = { colors: {}, styles: {} };
+    let looksKey = '';
     let error: string | null = null;
     let layer: FleetLayer | null = null;
     let selectedClass = 'all';
@@ -423,14 +423,14 @@
         try {
             let colorsChanged = false;
             if (force || !tracks || Date.now() - lastTracksFetch > TRACKS_POLL_MS) {
-                [tracks, colors] = await Promise.all([loadTracks(), loadBoatColors()]);
+                [tracks, looks] = await Promise.all([loadTracks(), loadBoatLooks()]);
                 lastTracksFetch = Date.now();
-                const key = JSON.stringify(colors);
-                colorsChanged = key !== colorsKey;
-                colorsKey = key;
+                const key = JSON.stringify(looks);
+                colorsChanged = key !== looksKey;
+                looksKey = key;
             }
             const { ranking, source } = await loadRanking();
-            const next = buildFleet(ranking, tracks as TracksFile, source, colors);
+            const next = buildFleet(ranking, tracks as TracksFile, source, looks);
             const changed = !fleet || next.maj.getTime() !== fleet.maj.getTime() || force || colorsChanged;
             fleet = next;
             error = null;

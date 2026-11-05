@@ -1,136 +1,174 @@
+import type { BoatStyle } from './types';
+
 /**
  * Silhouettes des bateaux vues du dessus, étrave vers le haut (cap 0).
  * Repère SVG centré sur le bateau : viewBox -20 -20 40 40, coque d'environ 25 unités de long,
  * de y = -13 (étrave) à y = 12 (tableau arrière). Le sillage occupe le bas du carré.
+ *
+ * Mise en couleur reprise de la cartographie officielle : coque, pont, cockpit, puis foils ou bras.
  */
 
 type Shape = {
     /** Taille de l'icône en pixels, avant le facteur de zoom */
     size: number;
-    /** Coques (remplies de la couleur du bateau) */
+    /** Coques */
     hulls: string[];
     /** Bras de liaison des multicoques */
     beams?: string[];
+    /** Les bras prennent la 4e couleur (catamarans) plutôt que celle de la coque */
+    beamsAccent?: boolean;
     /** Trampolines (filets entre les coques) */
     nets?: string[];
-    /** Foils et appendices dessinés en trait sombre */
+    /** Foils, dans la 4e couleur */
     foils?: string[];
-    /** Pont plus clair, dessiné dans la coque principale */
+    /** Pont (2e couleur) */
     deck: string;
-    /** Cockpit */
+    /** Cockpit (3e couleur) */
     cockpit: string;
-    /** Pied de mât */
-    mast: [number, number];
-    /** Bôme et grand voile vue du dessus */
-    sail: string;
-    /** Demi largeur des points d'où part le sillage, et ordonnée du tableau */
-    wake: { x: number; y: number }[];
+    /** Coins du tableau d'où part le sillage */
+    wake: { x: number; y: number; band?: boolean };
 };
 
 const mirror = (d: string) =>
     d.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${-Number(x)},${y}`);
 
 const MONO: Shape = {
-    size: 30,
+    size: 32,
     hulls: [
         'M0,-12.6 C2.9,-8.7 4.3,-3.6 4.2,1.6 C4.1,6.2 3.6,9.4 2.9,11.7 L-2.9,11.7 C-3.6,9.4 -4.1,6.2 -4.2,1.6 C-4.3,-3.6 -2.9,-8.7 0,-12.6 Z',
     ],
-    deck: 'M0,-10.3 C2,-7.2 3,-3.1 2.9,1.4 C2.8,5.4 2.4,8 2,9.7 L-2,9.7 C-2.4,8 -2.8,5.4 -2.9,1.4 C-3,-3.1 -2,-7.2 0,-10.3 Z',
-    cockpit: 'M-1.6,5.4 h3.2 v3.9 a1,1 0 0 1 -1,1 h-1.2 a1,1 0 0 1 -1,-1 Z',
-    mast: [0, -3.6],
-    sail: 'M0,-3.6 Q1.7,2.4 2.5,9',
-    wake: [{ x: 2.2, y: 11.9 }],
+    deck: 'M-2.6,-5.2 Q0,-6.2 2.6,-5.2 L2.9,9.6 L-2.9,9.6 Z',
+    cockpit: 'M-2.1,1.2 Q0,0.2 2.1,1.2 L2.4,9.6 L-2.4,9.6 Z',
+    wake: { x: 2.2, y: 11.9, band: true },
 };
 
+const IMOCA_HULL =
+    'M0,-12.6 C2.8,-11.8 4.6,-7.7 5,-1.6 C5.3,3.7 5.2,8.5 4.8,11.8 L-4.8,11.8 C-5.2,8.5 -5.3,3.7 -5,-1.6 C-4.6,-7.7 -2.8,-11.8 0,-12.6 Z';
+
+/** IMOCA à foils */
 const IMOCA: Shape = {
-    size: 34,
-    hulls: [
-        'M0,-12.6 C2.8,-11.8 4.6,-7.7 5,-1.6 C5.3,3.7 5.2,8.5 4.8,11.8 L-4.8,11.8 C-5.2,8.5 -5.3,3.7 -5,-1.6 C-4.6,-7.7 -2.8,-11.8 0,-12.6 Z',
-    ],
-    foils: ['M4.9,-2.6 C6.7,-2.6 8,-1.5 8.6,0.4', mirror('M4.9,-2.6 C6.7,-2.6 8,-1.5 8.6,0.4')],
-    deck: 'M0,-10.4 C2,-9.6 3.4,-6.6 3.7,-1.4 C3.9,3.3 3.8,7.4 3.5,9.9 L-3.5,9.9 C-3.8,7.4 -3.9,3.3 -3.7,-1.4 C-3.4,-6.6 -2,-9.6 0,-10.4 Z',
-    cockpit: 'M-2.5,6 h5 v4.4 a1.1,1.1 0 0 1 -1.1,1.1 h-2.8 a1.1,1.1 0 0 1 -1.1,-1.1 Z',
-    mast: [0, -2.6],
-    sail: 'M0,-2.6 Q2,3.8 3,10.2',
-    wake: [{ x: 3.4, y: 12 }],
+    size: 36,
+    hulls: [IMOCA_HULL],
+    foils: ['M4.9,-1.4 C6.8,-1.4 8.3,-0.3 9,1.6', mirror('M4.9,-1.4 C6.8,-1.4 8.3,-0.3 9,1.6')],
+    deck: 'M-3.4,-5.4 Q0,-6.6 3.4,-5.4 L3.9,10.2 L-3.9,10.2 Z',
+    cockpit: 'M-2.9,1.2 Q0,0 2.9,1.2 L3.3,10.2 L-3.3,10.2 Z',
+    wake: { x: 3.4, y: 12, band: true },
 };
 
+/** IMOCA à dérives droites */
+const IMOCA_DERIVES: Shape = { ...IMOCA, foils: undefined };
+
+/** Class40 à étrave ronde (scow) */
 const CLASS40: Shape = {
-    size: 30,
+    size: 32,
     hulls: [
         'M-2.8,-11.5 Q0,-12.9 2.8,-11.5 C4.4,-9.3 5,-5.1 5,0 C5,4.8 4.8,8.8 4.5,11.7 L-4.5,11.7 C-4.8,8.8 -5,4.8 -5,0 C-5,-5.1 -4.4,-9.3 -2.8,-11.5 Z',
     ],
-    deck: 'M-1.9,-9.6 Q0,-10.6 1.9,-9.6 C3.1,-7.7 3.7,-4.3 3.7,0 C3.7,4.2 3.5,7.6 3.3,9.8 L-3.3,9.8 C-3.5,7.6 -3.7,4.2 -3.7,0 C-3.7,-4.3 -3.1,-7.7 -1.9,-9.6 Z',
-    cockpit: 'M-2.3,6 h4.6 v4.3 a1.1,1.1 0 0 1 -1.1,1.1 h-2.4 a1.1,1.1 0 0 1 -1.1,-1.1 Z',
-    mast: [0, -2.8],
-    sail: 'M0,-2.8 Q1.9,3.4 2.9,9.8',
-    wake: [{ x: 3.2, y: 11.9 }],
+    deck: 'M-3.3,-5.2 Q0,-6.2 3.3,-5.2 L3.6,9.8 L-3.6,9.8 Z',
+    cockpit: 'M-2.8,1 Q0,0 2.8,1 L3.1,9.8 L-3.1,9.8 Z',
+    wake: { x: 3.2, y: 11.9, band: true },
 };
+
+const trimaran = (
+    size: number,
+    float: string,
+    beams: string[],
+    central: string,
+    deck: string,
+    cockpit: string,
+    nets?: string,
+    wakeY = 11.5,
+): Shape => ({
+    size,
+    hulls: [central, float, mirror(float)],
+    beams,
+    nets: nets ? [nets, mirror(nets)] : undefined,
+    deck,
+    cockpit,
+    wake: { x: 1.5, y: wakeY, band: true },
+});
 
 /** Ultim : 32 m de long pour 23 m de large, longs flotteurs et bras cintrés */
-const ULTIM: Shape = {
-    size: 46,
-    hulls: [
-        'M0,-13.2 C1.6,-8.6 2,-3 1.9,11.6 L-1.9,11.6 C-2,-3 -1.6,-8.6 0,-13.2 Z',
-        'M9.1,-10.2 C10.2,-6.5 10.5,-0.5 10.2,10 L8,10 C7.7,-0.5 8,-6.5 9.1,-10.2 Z',
-        mirror('M9.1,-10.2 C10.2,-6.5 10.5,-0.5 10.2,10 L8,10 C7.7,-0.5 8,-6.5 9.1,-10.2 Z'),
-    ],
-    beams: ['M-8.8,-3.2 Q0,-6.2 8.8,-3.2', 'M-8.8,5.4 Q0,3.6 8.8,5.4'],
-    deck: 'M0,-10.8 C1,-7.6 1.2,-3 1.1,9.6 L-1.1,9.6 C-1.2,-3 -1,-7.6 0,-10.8 Z',
-    cockpit: 'M-1.3,6.4 h2.6 v3.4 a0.9,0.9 0 0 1 -0.9,0.9 h-0.8 a0.9,0.9 0 0 1 -0.9,-0.9 Z',
-    mast: [0, -1.8],
-    sail: 'M0,-1.8 Q2,4.4 3.1,10.4',
-    wake: [{ x: 1.4, y: 11.8 }],
-};
+const ULTIM = trimaran(
+    46,
+    'M9.1,-10.2 C10.2,-6.5 10.5,-0.5 10.2,10 L8,10 C7.7,-0.5 8,-6.5 9.1,-10.2 Z',
+    ['M-8.8,-3.2 Q0,-6.2 8.8,-3.2', 'M-8.8,5.4 Q0,3.6 8.8,5.4'],
+    'M0,-13.2 C1.6,-8.6 2,-3 1.9,11.6 L-1.9,11.6 C-2,-3 -1.6,-8.6 0,-13.2 Z',
+    'M-1.2,-6 Q0,-6.8 1.2,-6 L1.4,9.8 L-1.4,9.8 Z',
+    'M-1.1,1.4 Q0,0.6 1.1,1.4 L1.3,9.8 L-1.3,9.8 Z',
+    undefined,
+    11.8,
+);
 
 /** Ocean Fifty : 15 m sur 15 m, aussi large que long, filets entre les coques */
-const OCEAN_FIFTY: Shape = {
-    size: 38,
+const OCEAN_FIFTY = trimaran(
+    38,
+    'M9.2,-8.6 C10.3,-5.2 10.6,0 10.3,8.8 L8.1,8.8 C7.8,0 8.1,-5.2 9.2,-8.6 Z',
+    ['M-8.6,-3.4 Q0,-4.6 8.6,-3.4', 'M-8.6,4.6 Q0,3.8 8.6,4.6'],
+    'M0,-12 C1.7,-7.8 2.1,-2.2 2,10.8 L-2,10.8 C-2.1,-2.2 -1.7,-7.8 0,-12 Z',
+    'M-1.3,-5.6 Q0,-6.4 1.3,-5.6 L1.5,9.2 L-1.5,9.2 Z',
+    'M-1.2,1.2 Q0,0.4 1.2,1.2 L1.4,9.2 L-1.4,9.2 Z',
+    'M2,-3.4 L8.2,-3.4 L8.2,4.6 L2,4.6 Z',
+    11,
+);
+
+/** Trimarans de l'ancienne génération, plus étroits */
+const VINTAGE_TRI = trimaran(
+    36,
+    'M7.2,-8 C8.2,-4.8 8.5,0 8.2,8.4 L6.2,8.4 C5.9,0 6.2,-4.8 7.2,-8 Z',
+    ['M-6.8,-2.8 Q0,-4 6.8,-2.8', 'M-6.8,4.2 Q0,3.4 6.8,4.2'],
+    'M0,-12.4 C1.9,-8.2 2.4,-2.6 2.3,11.2 L-2.3,11.2 C-2.4,-2.6 -1.9,-8.2 0,-12.4 Z',
+    'M-1.6,-5.6 Q0,-6.4 1.6,-5.6 L1.8,9.6 L-1.8,9.6 Z',
+    'M-1.4,1.2 Q0,0.4 1.4,1.2 L1.6,9.6 L-1.6,9.6 Z',
+    'M2.3,-2.8 L6.3,-2.8 L6.3,4.2 L2.3,4.2 Z',
+    11.4,
+);
+
+/** Catamaran : deux coques, nacelle centrale entre les bras */
+const CATAMARAN: Shape = {
+    size: 36,
     hulls: [
-        'M0,-12 C1.7,-7.8 2.1,-2.2 2,10.8 L-2,10.8 C-2.1,-2.2 -1.7,-7.8 0,-12 Z',
-        'M9.2,-8.6 C10.3,-5.2 10.6,0 10.3,8.8 L8.1,8.8 C7.8,0 8.1,-5.2 9.2,-8.6 Z',
-        mirror('M9.2,-8.6 C10.3,-5.2 10.6,0 10.3,8.8 L8.1,8.8 C7.8,0 8.1,-5.2 9.2,-8.6 Z'),
+        'M5.6,-12.4 C6.8,-8.6 7.2,-2.4 7,10.6 L4.4,10.6 C4.2,-2.4 4.5,-8.6 5.6,-12.4 Z',
+        mirror('M5.6,-12.4 C6.8,-8.6 7.2,-2.4 7,10.6 L4.4,10.6 C4.2,-2.4 4.5,-8.6 5.6,-12.4 Z'),
     ],
-    nets: ['M2,-3.4 L8.2,-3.4 L8.2,4.6 L2,4.6 Z', mirror('M2,-3.4 L8.2,-3.4 L8.2,4.6 L2,4.6 Z')],
-    beams: ['M-8.6,-3.4 Q0,-4.6 8.6,-3.4', 'M-8.6,4.6 Q0,3.8 8.6,4.6'],
-    deck: 'M0,-9.8 C1.1,-6.6 1.3,-2.2 1.2,9 L-1.2,9 C-1.3,-2.2 -1.1,-6.6 0,-9.8 Z',
-    cockpit: 'M-1.4,5.6 h2.8 v3.6 a0.9,0.9 0 0 1 -0.9,0.9 h-1 a0.9,0.9 0 0 1 -0.9,-0.9 Z',
-    mast: [0, -1.4],
-    sail: 'M0,-1.4 Q2,4 3,9.6',
-    wake: [{ x: 1.5, y: 11 }],
+    beams: ['M-4.6,-5 L4.6,-5', 'M-4.6,5.4 L4.6,5.4'],
+    beamsAccent: true,
+    deck: 'M-4.4,-3.6 L4.4,-3.6 L4.2,4 L-4.2,4 Z',
+    cockpit: 'M-2.8,-1.2 L2.8,-1.2 L2.6,4 L-2.6,4 Z',
+    wake: { x: 5.6, y: 10.8, band: false },
 };
 
-/** Multicoques de l'ancienne génération : trimarans plus étroits */
-const VINTAGE_MULTI: Shape = {
-    size: 34,
-    hulls: [
-        'M0,-12.4 C1.9,-8.2 2.4,-2.6 2.3,11.2 L-2.3,11.2 C-2.4,-2.6 -1.9,-8.2 0,-12.4 Z',
-        'M7.2,-8 C8.2,-4.8 8.5,0 8.2,8.4 L6.2,8.4 C5.9,0 6.2,-4.8 7.2,-8 Z',
-        mirror('M7.2,-8 C8.2,-4.8 8.5,0 8.2,8.4 L6.2,8.4 C5.9,0 6.2,-4.8 7.2,-8 Z'),
-    ],
-    nets: ['M2.3,-2.8 L6.3,-2.8 L6.3,4.2 L2.3,4.2 Z', mirror('M2.3,-2.8 L6.3,-2.8 L6.3,4.2 L2.3,4.2 Z')],
-    beams: ['M-6.8,-2.8 Q0,-4 6.8,-2.8', 'M-6.8,4.2 Q0,3.4 6.8,4.2'],
-    deck: 'M0,-10.2 C1.3,-6.9 1.6,-2.4 1.5,9.4 L-1.5,9.4 C-1.6,-2.4 -1.3,-6.9 0,-10.2 Z',
-    cockpit: 'M-1.5,5.8 h3 v3.6 a0.9,0.9 0 0 1 -0.9,0.9 h-1.2 a0.9,0.9 0 0 1 -0.9,-0.9 Z',
-    mast: [0, -1.6],
-    sail: 'M0,-1.6 Q2,4 3,9.8',
-    wake: [{ x: 1.7, y: 11.4 }],
+/** Silhouette d'après le type de la cartographie officielle, sinon d'après la classe */
+export const shapeFor = (classKey: string, type?: number): Shape => {
+    switch (type) {
+        case 2:
+            return CATAMARAN;
+        case 3:
+            return classKey === 'ultim' ? ULTIM : classKey === 'ocean-fifty' ? OCEAN_FIFTY : VINTAGE_TRI;
+        case 4:
+            return IMOCA;
+        case 5:
+            return CLASS40;
+        case 1:
+            return classKey === 'imoca' ? IMOCA_DERIVES : MONO;
+        default:
+            break;
+    }
+    switch (classKey) {
+        case 'ultim':
+            return ULTIM;
+        case 'ocean-fifty':
+            return OCEAN_FIFTY;
+        case 'imoca':
+            return IMOCA;
+        case 'class40':
+            return CLASS40;
+        case 'vintage-mono':
+            return MONO;
+        default:
+            return /multi|trimaran/i.test(classKey) ? VINTAGE_TRI : /catamaran/i.test(classKey) ? CATAMARAN : MONO;
+    }
 };
-
-const SHAPES: Record<string, Shape> = {
-    ultim: ULTIM,
-    'ocean-fifty': OCEAN_FIFTY,
-    imoca: IMOCA,
-    class40: CLASS40,
-    'vintage-multi': VINTAGE_MULTI,
-    'vintage-mono': MONO,
-};
-
-/** Multicoques connus, pour les classes qui n'ont pas leur propre silhouette */
-const MULTI_KEYS = /multi|ultim|fifty|trimaran|catamaran/i;
-
-export const shapeFor = (classKey: string): Shape =>
-    SHAPES[classKey] || (MULTI_KEYS.test(classKey) ? VINTAGE_MULTI : MONO);
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -162,72 +200,76 @@ export const luminance = (c: string) => {
 
 export interface BoatIconOptions {
     classKey: string;
+    /** Couleur de repli (classe ou couleur principale) quand le bateau n'a pas de livrée connue */
     color: string;
+    /** Livrée relevée sur la cartographie officielle */
+    style?: BoatStyle | null;
     /** Vitesse en nœuds, pour la longueur du sillage */
     speed: number;
-    /** Bateau arrêté (abandon, escale) : ni sillage ni voile */
+    /** Bateau arrêté (abandon, escale) : pas de sillage */
     stopped: boolean;
+    /** Bateau hors course : livrée grisée */
+    greyed?: boolean;
 }
 
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
 /** SVG complet d'un bateau, cap 0 */
-export function boatSvg({ classKey, color, speed, stopped }: BoatIconOptions) {
-    const s = shapeFor(classKey);
-    const light = luminance(color) > 0.45;
-    const edge = shade(color, light ? -0.55 : -0.62);
-    const deck = shade(color, light ? 0.35 : 0.28);
+export function boatSvg({ classKey, color, style, speed, stopped, greyed }: BoatIconOptions) {
+    const s = shapeFor(classKey, style?.type);
+    const grey = '#8c959e';
+    const c = style?.colors || [];
+    const hull = greyed ? grey : c[0] || color;
+    const deck = greyed ? shade(grey, 0.3) : c[1] || shade(hull, luminance(hull) > 0.45 ? -0.18 : 0.3);
+    const cockpit = greyed ? shade(grey, -0.3) : c[2] || shade(hull, -0.35);
+    const fourth = greyed ? shade(grey, -0.4) : c[3] || '';
+    const edge = shade(hull, luminance(hull) > 0.45 ? -0.55 : -0.62);
     const parts: string[] = [];
 
     if (!stopped && speed > 1.5) {
         // Sillage en V derrière le tableau, plus long quand le bateau va vite
         const k = clamp(speed / 24, 0.3, 1);
         const len = 8 * k;
-        const r = (v: number) => Math.round(v * 100) / 100;
-        for (const w of s.wake) {
-            // w.x : demi largeur du tableau, le V part de ses deux coins
-            const x0 = r(w.x * 0.8);
-            const x1 = r(w.x + 2.6 * k + 0.8);
-            const y1 = r(w.y + len);
+        const w = s.wake;
+        const x0 = r2(w.x * 0.8);
+        const x1 = r2(w.x + 2.6 * k + 0.8);
+        const y1 = r2(w.y + len);
+        parts.push(
+            `<path d="M${-x0},${w.y} L${-x1},${y1} M${x0},${w.y} L${x1},${y1}" stroke="#fff" stroke-opacity=".55" stroke-width=".85" stroke-linecap="round" fill="none"/>`,
+        );
+        if (w.band) {
             parts.push(
-                `<path d="M${-x0},${w.y} L${-x1},${y1} M${x0},${w.y} L${x1},${y1}" stroke="#fff" stroke-opacity=".6" stroke-width=".85" stroke-linecap="round" fill="none"/>`,
-                `<path d="M0,${r(w.y + 0.3)} L0,${r(w.y + len * 0.7)}" stroke="#fff" stroke-opacity=".3" stroke-width="${r(w.x * 1.1)}" stroke-linecap="round"/>`,
+                `<path d="M0,${r2(w.y + 0.3)} L0,${r2(w.y + len * 0.7)}" stroke="#fff" stroke-opacity=".28" stroke-width="${r2(Math.min(w.x, 3) * 1.1)}" stroke-linecap="round"/>`,
             );
         }
     }
 
     for (const d of s.nets || []) {
-        parts.push(`<path d="${d}" fill="#fff" fill-opacity=".22" stroke="${edge}" stroke-opacity=".5" stroke-width=".35"/>`);
+        parts.push(`<path d="${d}" fill="#fff" fill-opacity=".2" stroke="${edge}" stroke-opacity=".45" stroke-width=".35"/>`);
     }
+    const beamColor = s.beamsAccent && fourth ? fourth : hull;
     for (const d of s.beams || []) {
         parts.push(
-            `<path d="${d}" fill="none" stroke="${edge}" stroke-width="2.5" stroke-linecap="round"/>`,
-            `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.3" stroke-linecap="round"/>`,
+            `<path d="${d}" fill="none" stroke="${edge}" stroke-width="2.6" stroke-linecap="round"/>`,
+            `<path d="${d}" fill="none" stroke="${beamColor}" stroke-width="1.4" stroke-linecap="round"/>`,
         );
     }
     for (const d of s.foils || []) {
-        parts.push(`<path d="${d}" fill="none" stroke="${edge}" stroke-width="1.15" stroke-linecap="round"/>`);
-    }
-    for (const d of s.hulls) {
-        parts.push(`<path d="${d}" fill="${color}" stroke="${edge}" stroke-width=".9" stroke-linejoin="round"/>`);
-    }
-    parts.push(
-        `<path d="${s.deck}" fill="${deck}" fill-opacity=".55"/>`,
-        `<path d="${s.cockpit}" fill="${edge}" fill-opacity=".55"/>`,
-    );
-    if (!stopped) {
         parts.push(
-            `<path d="${s.sail}" fill="none" stroke="${edge}" stroke-width="1.9" stroke-linecap="round" stroke-opacity=".55"/>`,
-            `<path d="${s.sail}" fill="none" stroke="#fff" stroke-width="1.05" stroke-linecap="round"/>`,
+            `<path d="${d}" fill="none" stroke="${edge}" stroke-width="2.3" stroke-linecap="round"/>`,
+            `<path d="${d}" fill="none" stroke="${fourth || edge}" stroke-width="1.2" stroke-linecap="round"/>`,
         );
     }
-    parts.push(
-        `<circle cx="${s.mast[0]}" cy="${s.mast[1]}" r=".95" fill="#fff" stroke="${edge}" stroke-width=".6"/>`,
-    );
+    for (const d of s.hulls) {
+        parts.push(`<path d="${d}" fill="${hull}" stroke="${edge}" stroke-width=".9" stroke-linejoin="round"/>`);
+    }
+    parts.push(`<path d="${s.deck}" fill="${deck}"/>`, `<path d="${s.cockpit}" fill="${cockpit}"/>`);
     return `<svg viewBox="-20 -20 40 40" width="100%" height="100%" aria-hidden="true">${parts.join('')}</svg>`;
 }
 
-/** Taille d'affichage en pixels selon la classe et le zoom de la carte */
-export function boatSize(classKey: string, zoom: number, selected: boolean) {
-    const base = shapeFor(classKey).size;
+/** Taille d'affichage en pixels selon la silhouette et le zoom de la carte */
+export function boatSize(classKey: string, type: number | undefined, zoom: number, selected: boolean) {
+    const base = shapeFor(classKey, type).size;
     const z = zoom <= 3 ? 0.78 : zoom <= 4 ? 0.9 : zoom >= 8 ? 1.45 : zoom >= 7 ? 1.3 : zoom >= 6 ? 1.15 : 1;
     return Math.round(base * z * (selected ? 1.35 : 1));
 }
