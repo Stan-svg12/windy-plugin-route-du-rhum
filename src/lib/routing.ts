@@ -1,4 +1,4 @@
-import { ROUTES_URL, HAS_REPO } from './config';
+import { ROUTES_URL, ROUTED_URL, HAS_REPO } from './config';
 import { escapeHtml } from './format';
 
 /** Routages calculés par le workflow « routing » (routing/run_routing.py) */
@@ -101,6 +101,18 @@ export const loadRoutes = async (): Promise<RoutesFile | null> => {
         throw new Error(`HTTP ${res.status}`);
     }
     return parse(await res.json());
+};
+
+export const loadRoutedIds = async (): Promise<Set<string> | null> => {
+    if (!HAS_REPO) {
+        return null;
+    }
+    const res = await fetch(`${ROUTED_URL}?v=${Math.floor(Date.now() / 600000)}`, { cache: 'no-store' });
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+    }
+    const ids = await res.json();
+    return new Set((Array.isArray(ids) ? ids : []).map(String));
 };
 
 /** Position interpolée le long d'une route à l'instant t (ms), ou null hors de la route */

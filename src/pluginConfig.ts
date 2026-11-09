@@ -2,7 +2,7 @@ import type { ExternalPluginConfig } from '@windy/interfaces';
 
 const config: ExternalPluginConfig = {
     name: 'windy-plugin-route-du-rhum-routage',
-    version: '1.3.0',
+    version: '1.4.0',
     icon: '⛵',
     title: 'Route du Rhum 2026 · flotte et routage',
     description: 'Positions, trajectoires et classement de la Route du Rhum 2026 en direct, avec routage ECMWF (optimale, option Nord, option Sud) des IMOCA et Class40.',

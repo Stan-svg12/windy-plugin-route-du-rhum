@@ -181,7 +181,7 @@
     import { FleetLayer } from './lib/fleetLayer';
     import { buildFleet, loadBoatLooks, loadRanking, loadTracks } from './lib/data';
     import { RANKING_POLL_MS, ROUTED_CLASSES, STORAGE_PREFIX, TRACKS_POLL_MS } from './lib/config';
-    import { RoutingLayer, loadRoutes, routingHtml } from './lib/routing';
+    import { RoutingLayer, loadRoutedIds, loadRoutes, routingHtml } from './lib/routing';
     import type { RoutesFile } from './lib/routing';
     import { elapsed, knots, minutesUntil, nm, parisTime, raceDay, statusLabel } from './lib/format';
 
@@ -218,8 +218,18 @@
     let lastWind: string | null = null;
     let tsListener: number | null = null;
 
+    let routedIds: Set<string> | null = null;
+    const refreshRoutedIds = () =>
+        loadRoutedIds()
+            .then(s => {
+                routedIds = s;
+            })
+            .catch(() => {
+                /* liste indisponible : repli sur les classes routées */
+            });
+
     const popupExtra = (b: Boat): string =>
-        b.racing && ROUTED_CLASSES.includes(b.classKey)
+        b.racing && (routedIds ? routedIds.has(String(b.idCourse)) : ROUTED_CLASSES.includes(b.classKey))
             ? routingHtml(
                   b.id,
                   b.id === routedId ? routeState : 'off',
@@ -594,6 +604,8 @@
         layer = new FleetLayer(map, { onSelect, freeArea, mobile: isMobileOrTablet, popupExtra });
         routing = new RoutingLayer(map);
         tsListener = store.on('timestamp', (ts: number) => routing?.setTime(ts));
+        refreshRoutedIds();
+        timers.push(setInterval(refreshRoutedIds, TRACKS_POLL_MS));
         layer.setShowTracks(showTracks);
         layer.setLabelMode(labelMode);
         layer.setFavorites(favs);

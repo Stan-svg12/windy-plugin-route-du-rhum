@@ -10,6 +10,12 @@
       "polar": "class40.csv",
       "perf": 0.9,
       "maneuver_min": 6
+    },
+    "vintage-mono": {
+      "polar": null,
+      "perf": 0.9,
+      "maneuver_min": 5,
+      "_doc": "Pas de polaire générique : seuls les bateaux avec polars/boats/<idCourse>.csv sont routés"
     }
   },
   "option_offset_deg": null,

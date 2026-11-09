@@ -115,7 +115,12 @@ def main():
                 skipped[bid] = 'Bateau au port (escale technique), pas de routage'
                 continue
             own = os.path.join(POLARS, 'boats', f'{bid}.csv')
-            polar_path = own if os.path.exists(own) else os.path.join(POLARS, ccfg['polar'])
+            if os.path.exists(own):
+                polar_path = own
+            elif ccfg.get('polar'):
+                polar_path = os.path.join(POLARS, ccfg['polar'])
+            else:
+                continue  # classe routée seulement pour les bateaux qui ont leur propre polaire
             jobs.append((bid, (l['lat'], l['lon']), t0, polar_path, ccfg['perf'], ccfg['maneuver_min'], waypoints, offset))
 
     wind = WindField.open(a.wind)
@@ -143,6 +148,9 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
+    # Index léger lu par le plugin au démarrage : quels bateaux ont un bouton « Afficher le routage »
+    with open(os.path.join(ROOT, 'data', 'routed.json'), 'w', encoding='utf-8') as f:
+        json.dump(sorted(b for b, v in boats.items() if v.get('opts')), f, separators=(',', ':'))
     print(f'{len(boats)} bateaux routés en {time.time() - s:.0f} s ({wind.label}) -> {OUT} '
           f'({os.path.getsize(OUT) // 1024} ko)')
 

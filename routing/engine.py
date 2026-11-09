@@ -187,7 +187,7 @@ class RouteOptions:
     headings_step: float = 5.0
     sectors: int = 360
     dt_schedule: tuple = ((12 * 3600, 3600), (10**9, 3 * 3600))  # 1 h les 12 premières heures, puis 3 h
-    max_days: float = 25.0
+    max_days: float = 40.0
     gate: Gate | None = None
     finish_radius_nm: float = 3.0
 

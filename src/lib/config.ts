@@ -13,6 +13,8 @@ export const TRACKS_URL = HAS_REPO ? `${RAW}/tracks.json` : '';
 export const LATEST_URL = HAS_REPO ? `${RAW}/latest.json` : '';
 /** Routages (3 options par IMOCA et Class40), recalculés toutes les 3 h par le workflow « routing » */
 export const ROUTES_URL = HAS_REPO ? `${RAW}/routes.json` : '';
+/** Liste des bateaux routés (identifiants course), pour n'afficher le bouton que là où il y a un routage */
+export const ROUTED_URL = HAS_REPO ? `${RAW}/routed.json` : '';
 /** Classes routées (polaires disponibles) */
 export const ROUTED_CLASSES = ['imoca', 'class40'];
 /** Couleurs des bateaux, modifiables sans republier le plugin */
